@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	pb "golang.conradwood.net/autodeployer/proto"
 	"golang.conradwood.net/client"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // this is the non-privileged section of the autodeployer
@@ -40,6 +42,10 @@ func Execute() {
 		fmt.Printf("Failed to startup: %s\n", err)
 		os.Exit(10)
 	}
+	if srp.URL == "" {
+		fmt.Printf("no download url in startup response\n")
+		os.Exit(10)
+	}
 
 	// change to my working directory
 	err = os.Chdir(srp.WorkingDir)
@@ -50,7 +56,7 @@ func Execute() {
 	// download the binary and/or archive
 	binary := "executable"
 	fmt.Printf("Downloading binary from %s\n", srp.URL)
-	err = downloadFromURL(srp.URL, binary)
+	err = downloadFromURL(srp.URL, binary, srp.DownloadUser, srp.DownloadPassword)
 	if err != nil {
 		fmt.Printf("Failed to download from %s: %s\n", srp.URL, err)
 		os.Exit(10)
@@ -59,6 +65,7 @@ func Execute() {
 	// execute the binary
 	ports := countPortCommands(srp.Args)
 
+	fmt.Printf("Getting resources\n")
 	resources, err := cl.AllocResources(ctx, &pb.ResourceRequest{Msgid: *msgid, Ports: int32(ports)})
 	if err != nil {
 		fmt.Printf("Failed to alloc resources: %s\n", err)
@@ -79,40 +86,17 @@ func Execute() {
 	cmd := exec.Command(fullb, rArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	err = cmd.Start()
+	if err != nil {
+		fmt.Printf("Failed to start(): %s\n", err)
+		os.Exit(10)
+	}
 	_, err = cl.Started(ctx, &pb.StartedRequest{Msgid: *msgid})
 	if err != nil {
 		fmt.Printf("Failed to inform daemon about pending startup. aborting. (%s)\n", err)
 		os.Exit(10)
 	}
-	err = cmd.Run()
-	/*
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			fmt.Printf("Failed to get stdout of command %s: %s\n", fullb, err)
-			os.Exit(10)
-		}
-		err = cmd.Start()
-		if err != nil {
-			fmt.Printf("Failed to start command %s: %s\n", fullb, err)
-			os.Exit(10)
-		}
-		// set up our linereader so we capture stdout and forward to our daemon
-		lineOut := new(LineReader)
-		buf := make([]byte, 2)
-		for {
-			ct, err := stdout.Read(buf)
-			if err != nil {
-				fmt.Printf("Failed to read command output: %s\n", err)
-				break
-			}
-			line := lineOut.gotBytes(buf, ct)
-			if line != "" {
-				fmt.Printf(">>>>DIRECTCOMMAND: %s: %s\n", fullb, line)
-			}
-		}
-
-		err = cmd.Wait()
-	*/
+	cmd.Wait()
 	fmt.Printf("Command completed: %s\n", err)
 	failed := err != nil
 	cl.Terminated(ctx, &pb.TerminationRequest{Msgid: *msgid, Failed: failed})
@@ -148,7 +132,7 @@ func countPortCommands(args []string) int {
 	return res
 }
 
-func downloadFromURL(url string, target string) error {
+func downloadFromURL(url string, target string, user string, pw string) error {
 	fileName := target
 	fmt.Println("Downloading", url, "to", fileName)
 
@@ -159,14 +143,33 @@ func downloadFromURL(url string, target string) error {
 		return err
 	}
 	defer output.Close()
-
-	response, err := http.Get(url)
+	tr := &http.Transport{
+		MaxIdleConns:       10,
+		IdleConnTimeout:    30 * time.Second,
+		DisableCompression: true,
+	}
+	client := &http.Client{
+		Transport: tr,
+	}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fmt.Println("Error while downloading", url, "-", err)
+		return err
+	}
+	if user != "" {
+		fmt.Printf("Setting http username for url %s to \"%s\"\n", url, user)
+		req.SetBasicAuth(user, pw)
+	}
+	response, err := client.Do(req)
 	if err != nil {
 		fmt.Println("Error while downloading", url, "-", err)
 		return err
 	}
 	defer response.Body.Close()
-
+	fmt.Printf("Http.Get() response code: %d\n", response.StatusCode)
+	if isHttpError(response.StatusCode) {
+		return errors.New(fmt.Sprintf("http error: %d (%s)", response.StatusCode, response.Status))
+	}
 	n, err := io.Copy(output, response.Body)
 	if err != nil {
 		fmt.Println("Error while downloading", url, "-", err)
@@ -175,4 +178,14 @@ func downloadFromURL(url string, target string) error {
 
 	fmt.Println(n, "bytes downloaded.")
 	return nil
+}
+
+func isHttpError(code int) bool {
+	if (code >= 400) && (code <= 499) {
+		return true
+	}
+	if (code >= 500) && (code <= 599) {
+		return true
+	}
+	return false
 }

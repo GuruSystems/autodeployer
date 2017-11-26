@@ -7,18 +7,22 @@ import (
 	"fmt"
 	pb "golang.conradwood.net/autodeployer/proto"
 	"golang.conradwood.net/client"
+	"google.golang.org/grpc"
 )
 
 // static variables for flag parser
 var (
-	downloadurl = flag.String("url", "", "The `URL` of the binary to deploy")
-	binary      = flag.String("paras", "", "The relative path to the binary to deploy")
-	buildid     = flag.Int("build", 1, "The BuildID of the binary to be deployed")
-	repo        = flag.String("repo", "", "The name of the repository where the source of the binary to be deployed lives.")
+	downloaduser = flag.String("user", "", "the username to authenticate with at the downloadurl")
+	downloadpw   = flag.String("password", "", "the password to authenticate with at the downloadurl")
+	downloadurl  = flag.String("url", "", "The `URL` of the binary to deploy")
+	binary       = flag.String("paras", "", "The relative path to the binary to deploy")
+	buildid      = flag.Int("build", 1, "The BuildID of the binary to be deployed")
+	repo         = flag.String("repo", "", "The name of the repository where the source of the binary to be deployed lives.")
 )
 
 func main() {
 	flag.Parse()
+	grpc.EnableTracing = true
 	conn, err := client.DialWrapper("autodeployer.AutoDeployer")
 	if err != nil {
 		fmt.Println("failed to dial: %v", err)
@@ -29,13 +33,15 @@ func main() {
 
 	cl := pb.NewAutoDeployerClient(conn)
 	req := pb.DeployRequest{DownloadURL: *downloadurl,
-		Binary:     *binary,
-		BuildID:    uint64(*buildid),
-		Repository: *repo}
+		Binary:           *binary,
+		BuildID:          uint64(*buildid),
+		DownloadUser:     *downloaduser,
+		DownloadPassword: *downloadpw,
+		Repository:       *repo}
 	resp, err := cl.Deploy(ctx, &req)
 	if err != nil {
 		fmt.Printf("Failed to deploy %s-%d from %s: %s\n", req.Repository, req.BuildID, req.DownloadURL, err)
 		return
 	}
-	fmt.Printf("Response to createvpn: %v\n", resp)
+	fmt.Printf("Response to deploy: %v\n", resp)
 }

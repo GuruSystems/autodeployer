@@ -7,10 +7,12 @@ import "google/api/annotations.proto";
 
 message DeployRequest {
  string DownloadURL=1;
- string Binary=2;
- repeated string Args=3;
- string Repository=4;
- uint64 BuildID=5;
+ string DownloadUser=2;
+ string DownloadPassword=3;
+ string Binary=4;
+ repeated string Args=5;
+ string Repository=6;
+ uint64 BuildID=7;
 }
 enum DeploymentStatus {
 // nothing happened yet
@@ -27,10 +29,16 @@ enum DeploymentStatus {
 }
 
 message DeployResponse {
+// did it succeed in starting and running?
+bool Success=1;
+// does it remain running (might be a very shortlived application)
+bool Running=2;
+// any messages?
+string Message=3;
 // the local ports chosen for the application
-repeated uint32 Ports=1;
+repeated uint32 Ports=4;
 // the user this application runs as
-string userid=2;
+string userid=5;
 }
 
 message EmptyResponse{}
@@ -47,9 +55,11 @@ string Msgid=1;
 
 message StartupResponse {
 string URL=1;
-string Binary=2;
-repeated string Args=3;
-string WorkingDir=4;
+ string DownloadUser=2;
+ string DownloadPassword=3;
+string Binary=4;
+repeated string Args=5;
+string WorkingDir=6;
 }
 
 message ResourceRequest {

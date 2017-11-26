@@ -30,31 +30,37 @@ import (
 
 // static variables for flag parser
 var (
-	msgid    = flag.String("msgid", "", "A msgid indicating that we've been forked() and execing the command. used internally only")
-	port     = flag.Int("port", 4000, "The server port")
-	deployed []*Deployed
-	portLock = new(sync.Mutex)
+	msgid        = flag.String("msgid", "", "A msgid indicating that we've been forked() and execing the command. used internally only")
+	port         = flag.Int("port", 4000, "The server port")
+	test         = flag.Bool("test", false, "set to true if you testing the server")
+	deployed     []*Deployed
+	portLock     = new(sync.Mutex)
+	idleReaper   = flag.Int("reclaim", 5, "Reclaim terminated user accounts after `seconds`")
+	startTimeout = flag.Int("start_timeout", 5, "timeout a deployment after `seconds`")
 )
 
 // information about a currently deployed application
 type Deployed struct {
 	// if true, then there is no application currently deployed for this user
-	idle       bool
-	startupMsg string
-	binary     string
-	status     pb.DeploymentStatus
-	ports      []int
-	user       *user.User
-	cmd        *exec.Cmd
-	repo       string
-	build      uint64
-	exitCode   error
-	url        string
-	args       []string
-	workingDir string
-	Stdout     io.Reader
-	started    time.Time
-	finished   time.Time
+	idle         bool
+	startupMsg   string
+	binary       string
+	status       pb.DeploymentStatus
+	ports        []int
+	user         *user.User
+	cmd          *exec.Cmd
+	repo         string
+	build        uint64
+	exitCode     error
+	url          string
+	args         []string
+	workingDir   string
+	Stdout       io.Reader
+	started      time.Time
+	finished     time.Time
+	lastLine     string
+	downloadUser string
+	downloadPW   string
 }
 
 // callback from the compound initialisation
@@ -69,9 +75,12 @@ func main() {
 	flag.Parse() // parse stuff. see "var" section above
 	if *msgid != "" {
 		Execute()
+		os.Exit(10) // should never happen
 	}
-	// testing
-	go testing()
+	if *test {
+		// testing
+		go testing()
+	}
 	sd := server.ServerDef{
 		Port: *port,
 	}
@@ -116,11 +125,21 @@ type AutoDeployer struct {
 }
 
 func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.DeployResponse, error) {
+	if cr.DownloadURL == "" {
+		return nil, errors.New("DownloadURL is required")
+	}
+	if cr.Repository == "" {
+		return nil, errors.New("Repositoryname is required")
+	}
+	fmt.Printf("Deploying %s, Build %d\n", cr.Repository, cr.BuildID)
 	users := getListOfUsers()
 	for _, un := range users {
 		fmt.Printf("User %s\n", un)
 	}
 	du := allocUser(users)
+	if du == nil {
+		return nil, errors.New("Failed to allocate a user. Server out of processes?")
+	}
 	du.started = time.Now()
 	du.repo = cr.Repository
 	du.build = cr.BuildID
@@ -143,6 +162,9 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	cmd := exec.Command("su", "-s", binname, du.user.Username, "--", fmt.Sprintf("-msgid=%s", du.startupMsg))
 	fmt.Printf("Executing: %v\n", cmd)
 	// fill our deploystatus with stuff
+	// copy deployment request to deployment descriptor
+	du.downloadUser = cr.DownloadUser
+	du.downloadPW = cr.DownloadPassword
 	du.cmd = cmd
 	du.workingDir = wd
 	du.args = cr.Args
@@ -167,15 +189,39 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	go waitForCommand(du)
 
 	// now we need to wait for our internal startup message..
+	sloop := time.Now()
+	lastStatus := du.status
 	for {
+		if du.status != lastStatus {
+			fmt.Printf("Command %s changed status from %s to %s\n", du.toString(), lastStatus, du.status)
+			lastStatus = du.status
+		}
 		// wait
-		if du.status != pb.DeploymentStatus_STARTING {
-			break
+		if du.status == pb.DeploymentStatus_TERMINATED {
+			if du.exitCode != nil {
+				if du.lastLine == "" {
+					return nil, du.exitCode
+				}
+				txt := fmt.Sprintf("%s (%s)", du.exitCode, du.lastLine)
+				return nil, errors.New(txt)
+			}
+			resp := pb.DeployResponse{
+				Success: true,
+				Message: "OK",
+				Running: false}
+			return &resp, nil
+		} else if du.status == pb.DeploymentStatus_EXECUSER {
+			resp := pb.DeployResponse{
+				Success: true,
+				Message: "OK",
+				Running: true}
+			return &resp, nil
+		}
+		if time.Since(sloop) > (time.Duration(*startTimeout) * time.Second) {
+			return nil, errors.New(fmt.Sprintf("Timeout after %d seconds", *startTimeout))
 		}
 	}
-	fmt.Printf("Command update: %s\n", du.toString())
-	resp := pb.DeployResponse{}
-	return &resp, nil
+	return nil, errors.New("Deploy() in server - this codepath should never have been reached!")
 }
 
 func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupRequest) (*pb.StartupResponse, error) {
@@ -189,10 +235,12 @@ func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupReques
 	}
 	d.status = pb.DeploymentStatus_DOWNLOADING
 	sr := &pb.StartupResponse{
-		URL:        d.url,
-		Args:       d.args,
-		Binary:     d.binary,
-		WorkingDir: d.workingDir,
+		URL:              d.url,
+		Args:             d.args,
+		Binary:           d.binary,
+		DownloadUser:     d.downloadUser,
+		DownloadPassword: d.downloadPW,
+		WorkingDir:       d.workingDir,
 	}
 	return sr, nil
 }
@@ -235,6 +283,7 @@ func waitForCommand(du *Deployed) {
 		line := lineOut.gotBytes(buf, ct)
 		if line != "" {
 			fmt.Printf(">>>>COMMAND: %s: %s\n", du.toString(), line)
+			du.lastLine = line
 		}
 	}
 	err := du.cmd.Wait()
@@ -248,6 +297,17 @@ func waitForCommand(du *Deployed) {
 	} else {
 		fmt.Printf("Exited normally: %s\n", du.toString())
 	}
+
+	// we clean up - to make sure we really really release resources, we "slay" the user
+	cmd := exec.Command("/usr/sbin/slay", "-clean", du.user.Username)
+	fmt.Printf("Slaying process of user %s\n", du.user.Username)
+	err = cmd.Run()
+	if err != nil {
+		fmt.Printf("Slay failed: %s\n", err)
+	} else {
+		fmt.Printf("Slay %s done\n", du.user.Username)
+	}
+
 }
 
 func (s *AutoDeployer) AllocResources(ctx context.Context, cr *pb.ResourceRequest) (*pb.ResourceResponse, error) {
@@ -256,13 +316,15 @@ func (s *AutoDeployer) AllocResources(ctx context.Context, cr *pb.ResourceReques
 	if d == nil {
 		return nil, errors.New("No such deployment")
 	}
+	d.status = pb.DeploymentStatus_RESOURCING
+	fmt.Printf("Going into singleton port lock...\n")
 	portLock.Lock()
 	// lock this!
 	for i := 0; i < int(cr.Ports); i++ {
 		res.Ports = append(res.Ports, allocPort(d))
 	}
 	portLock.Unlock()
-	// unlock
+	fmt.Printf("Done singleton port lock...\n")
 	return res, nil
 }
 
@@ -343,9 +405,10 @@ func allocUser(users []*user.User) *Deployed {
 					continue
 				}
 				// terminated and not idle
-				if time.Since(d.finished) > (5 * time.Minute) {
+				if time.Since(d.finished) > (time.Duration(*idleReaper) * time.Second) {
 					// and that for some time...
 					d.idle = true
+					fmt.Printf("Reclaimed %s\n", d.toString())
 					needclean = true
 					break
 				}

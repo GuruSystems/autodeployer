@@ -20,24 +20,28 @@ import (
 	apb "golang.conradwood.net/auth/proto"
 	pb "golang.conradwood.net/registrar/proto"
 	"google.golang.org/grpc/codes"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 )
 
 var (
-	servercrt        = flag.String("rpc_server_certificate", "/etc/grpc/server/certificate.pem", "`filename` of the server certificate to be used for incoming connections to this rpc server")
-	servercertkey    = flag.String("rpc_server_certkey", "/etc/grpc/server/privatekey.pem", "`filename` of the key for the server certificate to be used for incoming connections to this rpc server")
-	serverca         = flag.String("rpc_server_ca", "/etc/grpc/server/ca.pem", "`filename` of the the CA certificate which signed both client and server certificate")
+	/*
+		servercrt        = flag.String("rpc_server_certificate", "/etc/grpc/server/certificate.pem", "`filename` of the server certificate to be used for incoming connections to this rpc server")
+		servercertkey    = flag.String("rpc_server_certkey", "/etc/grpc/server/privatekey.pem", "`filename` of the key for the server certificate to be used for incoming connections to this rpc server")
+		serverca         = flag.String("rpc_server_ca", "/etc/grpc/server/ca.pem", "`filename` of the the CA certificate which signed both client and server certificate")
+	*/
 	Registry         = flag.String("registry", "localhost:5000", "Registrar server address (to register with)")
 	serveraddr       = flag.String("address", "", "Address (default: derive from connection to registrar. does not work well with localhost)")
 	authconn         *grpc.ClientConn
 	register_refresh = flag.Int("register_refresh", 10, "registration refresh interval in `seconds`")
 	usercache        = make(map[string]*UserCache)
 	ctrmetrics       = make(map[string]*uint64)
-	registered       = make(map[string]bool)
+	registered       = make(map[string]string)
+	stopped          bool
 )
 
 type UserCache struct {
@@ -49,9 +53,9 @@ type Register func(server *grpc.Server) error
 
 type ServerDef struct {
 	Port        int
-	Certificate string
-	Key         string
-	CA          string
+	Certificate []byte
+	Key         []byte
+	CA          []byte
 	Register    Register
 	// set to true if this server does NOT require authentication (default: it does need authentication)
 	NoAuth bool
@@ -63,14 +67,14 @@ func CheckCookie(cookie string) bool {
 }
 
 func (s *ServerDef) init() {
-	if s.Certificate == "" {
-		s.Certificate = *servercrt
+	if len(s.Certificate) == 0 {
+		s.Certificate = Certificate
 	}
-	if s.Key == "" {
-		s.Key = *servercertkey
+	if len(s.Key) == 0 {
+		s.Key = Privatekey
 	}
-	if s.CA == "" {
-		s.CA = *serverca
+	if len(s.CA) == 0 {
+		s.CA = Ca
 	}
 }
 func StreamAuthInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
@@ -157,17 +161,41 @@ func GetAuthClient() (apb.AuthenticationServiceClient, error) {
 
 func registerMe(def ServerDef) error {
 	for _, name := range def.names {
-		if registered[name] == false {
+		if registered[name] == "" {
 			fmt.Printf("Registering Service: \"%s\"\n", name)
 		}
-		err := AddRegistry(name, def.Port)
+		id, err := AddRegistry(name, def.Port)
 		if err != nil {
 			return fmt.Errorf("Failed to register %s with registry server", name, err)
 		}
-		registered[name] = true
+		registered[name] = id
 	}
 	return nil
 
+}
+
+func stopping() {
+	if stopped {
+		return
+	}
+	fmt.Printf("Server shutdown - deregistering services\n")
+	opts := []grpc.DialOption{grpc.WithInsecure()}
+	rconn, err := grpc.Dial(*Registry, opts...)
+	if err != nil {
+		fmt.Printf("failed to dial registry server: %v", err)
+		return
+	}
+	defer rconn.Close()
+	c := pb.NewRegistryClient(rconn)
+
+	for key, value := range registered {
+		fmt.Printf("Deregistering Service \"%s\" => %s\n", key, value)
+		_, err := c.DeregisterService(context.Background(), &pb.DeregisterRequest{ServiceID: value})
+		if err != nil {
+			fmt.Printf("Failed to deregister Service \"%s\" => %s: %s\n", key, value, err)
+		}
+	}
+	stopped = true
 }
 
 // this is our typical gRPC server startup
@@ -177,29 +205,28 @@ func registerMe(def ServerDef) error {
 // it also configures the rpc server to expect a token to identify
 // the user in the rpc metadata call
 func ServerStartup(def ServerDef) error {
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		stopping()
+		os.Exit(0)
+	}()
+	stopped = false
+	defer stopping()
 	def.init()
 	listenAddr := fmt.Sprintf(":%d", def.Port)
 	fmt.Println("Starting server on ", listenAddr)
 
-	BackendCert, err := ioutil.ReadFile(def.Certificate)
-	if err != nil {
-		return fmt.Errorf("Failed to read certificate from file \"%s\": %s", def.Certificate, err)
-	}
-	BackendKey, err := ioutil.ReadFile(def.Key)
-	if err != nil {
-		return fmt.Errorf("Failed to read key from file \"%s\": %s", def.Key, err)
-	}
-	ImCert, err := ioutil.ReadFile(def.CA)
-	if err != nil {
-		return fmt.Errorf("Failed to read CA certificate from file \"%s\": %s", def.CA, err)
-	}
-
+	BackendCert := Certificate
+	BackendKey := Privatekey
+	ImCert := Ca
 	cert, err := tls.X509KeyPair(BackendCert, BackendKey)
 	if err != nil {
 		return fmt.Errorf("failed to parse certificate: %v\n", err)
 	}
 	roots := x509.NewCertPool()
-	FrontendCert, _ := ioutil.ReadFile(def.Certificate)
+	FrontendCert := Certificate
 	roots.AppendCertsFromPEM(FrontendCert)
 	roots.AppendCertsFromPEM(ImCert)
 
@@ -280,6 +307,7 @@ func serveServiceInfo(w http.ResponseWriter, req *http.Request, sd ServerDef) {
 
 // this services the /pleaseshutdown url
 func pleaseShutdown(w http.ResponseWriter, req *http.Request, sd ServerDef) {
+	stopping()
 	fmt.Fprintf(w, "OK\n")
 	os.Exit(0)
 }
@@ -300,14 +328,8 @@ func startHttpServe(sd ServerDef, grpcServer *grpc.Server) error {
 		panic(err)
 	}
 
-	BackendCert, err := ioutil.ReadFile(sd.Certificate)
-	if err != nil {
-		return fmt.Errorf("Failed to read certificate from file \"%s\": %s", sd.Certificate, err)
-	}
-	BackendKey, err := ioutil.ReadFile(sd.Key)
-	if err != nil {
-		return fmt.Errorf("Failed to read key from file \"%s\": %s", sd.Key, err)
-	}
+	BackendCert := Certificate
+	BackendKey := Privatekey
 	cert, err := tls.X509KeyPair(BackendCert, BackendKey)
 
 	srv := &http.Server{
@@ -341,13 +363,13 @@ func grpcHandlerFunc(grpcServer *grpc.Server, otherHandler http.Handler) http.Ha
 	})
 }
 
-func AddRegistry(name string, port int) error {
+func AddRegistry(name string, port int) (string, error) {
 	//fmt.Printf("Registering service %s with registry server\n", name)
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 	conn, err := grpc.Dial(*Registry, opts...)
 	if err != nil {
 		fmt.Println("failed to dial registry server: %v", err)
-		return err
+		return "", err
 	}
 	defer conn.Close()
 	client := pb.NewRegistryClient(conn)
@@ -363,13 +385,13 @@ func AddRegistry(name string, port int) error {
 		fmt.Printf("RegisterService(%s) failed: %s\n", req.Service.Name, err)
 		fmt.Printf("  Published address: \"%s\"\n", req.Address[0].Host)
 		fmt.Printf("  Registry:   %s\n", *Registry)
-		return err
+		return "", err
 	}
 	if resp == nil {
 		fmt.Println("Registration failed with no error provided.")
 	}
 	//fmt.Printf("Response to register service: %v\n", resp)
-	return nil
+	return resp.ServiceID, nil
 }
 
 // expose an ever-increasing counter with the given metric
