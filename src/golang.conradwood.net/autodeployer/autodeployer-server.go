@@ -1,66 +1,344 @@
 package main
 
+// this is the main, privileged daemon. got to run as root because we're forking off
+// different users from here
+
+// fileaccess is split out to starter.go, which runs as an unprivileged user
+
+// (this is done by virtue of exec('su',Args[0]) )
+// the flag msgid goes into the startup code, so do not run the privileged daemon with that flag!
+
 import (
 	"fmt"
 	"google.golang.org/grpc"
 	//	"github.com/golang/protobuf/proto"
+	"errors"
 	"flag"
 	pb "golang.conradwood.net/autodeployer/proto"
 	"golang.conradwood.net/server"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/peer"
+	"io"
+	"os"
+	"os/exec"
+	"os/user"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // static variables for flag parser
 var (
-	port = flag.Int("port", 10000, "The server port")
+	msgid    = flag.String("msgid", "", "A msgid indicating that we've been forked() and execing the command. used internally only")
+	port     = flag.Int("port", 4000, "The server port")
+	deployed []*Deployed
 )
+
+// information about a currently deployed application
+type Deployed struct {
+	// if true, then there is no application currently deployed for this user
+	idle       bool
+	startupMsg string
+	binary     string
+	status     pb.DeploymentStatus
+	ports      []int
+	user       *user.User
+	cmd        *exec.Cmd
+	repo       string
+	build      uint64
+	exitCode   error
+	url        string
+	args       []string
+	workingDir string
+	Stdout     io.Reader
+}
+
 // callback from the compound initialisation
 func st(server *grpc.Server) error {
-        s := new(VpnManagerServer)
-        // Register the handler object
-        pb.RegisterVpnManagerServer(server, s)
-        return nil
+	s := new(AutoDeployer)
+	// Register the handler object
+	pb.RegisterAutoDeployerServer(server, s)
+	return nil
 }
 
 func main() {
-        flag.Parse() // parse stuff. see "var" section above
-        sd := server.ServerDef{
-                Port: *port,
-        }
-        sd.Register = st
-        err := server.ServerStartup(sd)
-        if err != nil {
-                fmt.Printf("failed to start server: %s\n", err)
-        }
-        fmt.Printf("Done\n")
-        return
+	flag.Parse() // parse stuff. see "var" section above
+	if *msgid != "" {
+		Execute()
+	}
+	// testing
+	go testing()
+	sd := server.ServerDef{
+		Port: *port,
+	}
+	sd.Register = st
+	err := server.ServerStartup(sd)
+	if err != nil {
+		fmt.Printf("failed to start server: %s\n", err)
+	}
+	fmt.Printf("Done\n")
+	return
 
+}
+
+//*********************************************************************
+
+func testing() {
+	time.Sleep(time.Second * 1) // server needs starting up...
+	ad := new(AutoDeployer)
+
+	dp := pb.DeployRequest{
+		DownloadURL: "http://localhost/application",
+		Repository:  "testrepo",
+		Binary:      "testapp",
+		Args:        []string{"-port=${PORT1}", "-http_port=${PORT2}"},
+		BuildID:     123,
+	}
+	dr, err := ad.Deploy(nil, &dp)
+	if err != nil {
+		fmt.Printf("Failed to deploy %s\n", err)
+		os.Exit(10)
+	}
+	fmt.Printf("Deployed %v.\n", dr)
+	fmt.Printf("Waiting forever...(testing a daemon)\n")
+	select {}
 }
 
 /**********************************
 * implementing the functions here:
 ***********************************/
-type VpnManagerServer struct {
+type AutoDeployer struct {
 	wtf int
 }
 
-// in C we put methods into structs and call them pointers to functions
-// in java/python we also put pointers to functions into structs and but call them "objects" instead
-// in Go we don't put functions pointers into structs, we "associate" a function with a struct.
-// (I think that's more or less the same as what C does, just different Syntax)
-func (s *VpnManagerServer) CreateVpn(ctx context.Context, CreateRequest *pb.CreateRequest) (*pb.CreateResponse, error) {
-	peer, ok := peer.FromContext(ctx)
-	if !ok {
-		fmt.Println("Error getting peer ")
+func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.DeployResponse, error) {
+	users := getListOfUsers()
+	for _, un := range users {
+		fmt.Printf("User %s\n", un)
 	}
-	fmt.Println(peer.Addr, "called createvpn")
-	resp := pb.CreateResponse{}
-	resp.Certificate = "I am a fake certificate"
+	du := allocUser(users)
+	du.repo = cr.Repository
+	du.build = cr.BuildID
+	_, wd := filepath.Split(du.user.HomeDir)
+	wd = fmt.Sprintf("/srv/autodeployer/deployments/%s", wd)
+	fmt.Printf("Deploying \"%s\" as user \"%s\" in %s\n", cr.Repository, du.user.Username, wd)
+	uid, _ := strconv.Atoi(du.user.Uid)
+	gid, _ := strconv.Atoi(du.user.Gid)
+	err := createWorkingDirectory(wd, uid, gid)
+	if err != nil {
+		fmt.Printf("Failed to create working directory %s: %s\n", wd, err)
+		return nil, err
+	}
+	du.startupMsg = RandomString(16)
+	binname := os.Args[0]
+	fmt.Printf("Binary name (self): \"%s\"\n", binname)
+	if binname == "" {
+		return nil, errors.New("Failed to re-exec self. check startup path of daemon")
+	}
+	cmd := exec.Command("su", "-s", binname, du.user.Username, "--", fmt.Sprintf("-msgid=%s", du.startupMsg))
+	fmt.Printf("Executing: %v\n", cmd)
+	// fill our deploystatus with stuff
+	du.cmd = cmd
+	du.workingDir = wd
+	du.args = cr.Args
+	du.url = cr.DownloadURL
+	du.binary = cr.Binary
+
+	du.status = pb.DeploymentStatus_STARTING
+	du.Stdout, err = du.cmd.StdoutPipe()
+	if err != nil {
+		s := fmt.Sprintf("Could not get cmd output: %s\n", err)
+		du.idle = true
+		return nil, errors.New(s)
+	}
+	fmt.Printf("Starting Command: %s\n", du.toString())
+	err = cmd.Start()
+	if err != nil {
+		fmt.Printf("Command: %v failed\n", cmd)
+		du.idle = true
+		return nil, err
+	}
+	// reap children...
+	go waitForCommand(du)
+
+	// now we need to wait for our internal startup message..
+	for {
+		// wait
+		if du.status != pb.DeploymentStatus_STARTING {
+			break
+		}
+	}
+	fmt.Printf("Command update: %s\n", du.toString())
+	resp := pb.DeployResponse{}
 	return &resp, nil
 }
 
-func (s *VpnManagerServer) Ping(ctx context.Context, pr *pb.PingRequest) (*pb.PingResponse, error) {
-	fmt.Println("pong")
-	return nil, nil
+func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupRequest) (*pb.StartupResponse, error) {
+
+	d := entryByMsg(cr.Msgid)
+	if d == nil {
+		return nil, errors.New("No such deployment")
+	}
+	if d.status != pb.DeploymentStatus_STARTING {
+		return nil, errors.New(fmt.Sprintf("Deployment in status %s not STARTING!", d.status))
+	}
+	d.status = pb.DeploymentStatus_DOWNLOADING
+	sr := &pb.StartupResponse{
+		URL:        d.url,
+		Args:       d.args,
+		Binary:     d.binary,
+		WorkingDir: d.workingDir,
+	}
+	return sr, nil
+}
+func (s *AutoDeployer) Started(ctx context.Context, cr *pb.StartedRequest) (*pb.EmptyResponse, error) {
+	d := entryByMsg(cr.Msgid)
+	if d == nil {
+		return nil, errors.New("No such deployment")
+	}
+	d.status = pb.DeploymentStatus_EXECUSER
+	return &pb.EmptyResponse{}, nil
+}
+func (s *AutoDeployer) Terminated(ctx context.Context, cr *pb.TerminationRequest) (*pb.EmptyResponse, error) {
+	d := entryByMsg(cr.Msgid)
+	if d == nil {
+		return nil, errors.New("No such deployment")
+	}
+	if cr.Failed {
+		fmt.Printf("Child reports: %s failed.\n", d.toString())
+		d.exitCode = errors.New("Unspecified OS Failure")
+	} else {
+		fmt.Printf("Child reports: %s exited.\n", d.toString())
+	}
+	d.status = pb.DeploymentStatus_TERMINATED
+	return &pb.EmptyResponse{}, nil
+}
+
+// async, whenever a process exits...
+func waitForCommand(du *Deployed) {
+	lineOut := new(LineReader)
+	buf := make([]byte, 2)
+	for {
+		ct, err := du.Stdout.Read(buf)
+		if err != nil {
+			if err != io.EOF {
+				fmt.Printf("Failed to read command output: %s\n", err)
+			}
+			break
+		}
+		line := lineOut.gotBytes(buf, ct)
+		if line != "" {
+			fmt.Printf(">>>>COMMAND: %s: %s\n", du.toString(), line)
+		}
+	}
+	err := du.cmd.Wait()
+	du.status = pb.DeploymentStatus_TERMINATED
+	if du.exitCode == nil {
+		du.exitCode = err
+	}
+	if du.exitCode != nil {
+		fmt.Printf("Failed: %s (%s)\n", du.toString(), du.exitCode)
+	} else {
+		fmt.Printf("Exited normally: %s\n", du.toString())
+	}
+}
+
+func (s *AutoDeployer) AllocResources(ctx context.Context, cr *pb.ResourceRequest) (*pb.ResourceResponse, error) {
+	res := &pb.ResourceResponse{}
+	// lock this!
+	res.Ports = append(res.Ports, 6021)
+	res.Ports = append(res.Ports, 6022)
+	res.Ports = append(res.Ports, 6023)
+	// unlock
+	return res, nil
+}
+
+/**********************************
+* implementing helper functions here
+***********************************/
+// given a user string will get the entry for that user
+// will always return one (creates one if necessary)
+func entryForUser(user *user.User) *Deployed {
+	for _, d := range deployed {
+		if d.user.Username == user.Username {
+			return d
+		}
+	}
+	d := &Deployed{user: user, idle: true}
+	deployed = append(deployed, d)
+	return d
+}
+
+// find entry by msgid. nul if none found
+func entryByMsg(msgid string) *Deployed {
+	for _, d := range deployed {
+		if d.startupMsg == msgid {
+			return d
+		}
+	}
+	return nil
+}
+
+// given a list of users will pick one that is currently not used for deployment
+// returns username
+func allocUser(users []*user.User) *Deployed {
+	for _, u := range users {
+		d := entryForUser(u)
+		if d.idle {
+			d.idle = false
+			d.status = pb.DeploymentStatus_PREPARING
+			return d
+		}
+	}
+	return nil
+}
+
+// creates a pristine, fresh, empty, standard nice working directory
+func createWorkingDirectory(dir string, uid int, gid int) error {
+
+	// we are going to delete the entire directory, so let's make
+	// sure it's the right directory!
+	if !strings.HasPrefix(dir, "/srv/autodeployer") {
+		return errors.New(fmt.Sprintf("%s is not absolute", dir))
+	}
+	err := os.RemoveAll(dir)
+
+	if err != nil {
+		return errors.New(fmt.Sprintf("Failed to remove directory %s: %s", dir, err))
+	}
+	err = os.Mkdir(dir, 0700)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Failed to mkdir %s: %s", dir, err))
+
+	}
+	f, err := os.Open(dir)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Failed to open %s: %s", dir, err))
+	}
+	defer f.Close()
+	err = f.Chown(uid, gid)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Failed to chown %s: %s", dir, err))
+	}
+	return nil
+}
+
+// cycles through users deploy1, deploy2, deploy3 ... until the first one not found
+func getListOfUsers() []*user.User {
+	var res []*user.User
+	i := 1
+	for {
+		un := fmt.Sprintf("deploy%d", i)
+		u, err := user.Lookup(un)
+		if err != nil {
+			break
+		}
+		res = append(res, u)
+		i++
+	}
+	return res
+}
+
+func (d *Deployed) toString() string {
+	return fmt.Sprintf("%s-%d (%s) %s", d.repo, d.build, d.startupMsg, d.status)
 }

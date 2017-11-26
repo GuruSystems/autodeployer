@@ -4,39 +4,69 @@ syntax = "proto3";
 package autodeployer;
 
 import "google/api/annotations.proto";
-/*
-import "google/protobuf/empty.proto";
-import "google/protobuf/duration.proto";
-import "examples/sub/message.proto";
-import "examples/sub2/message.proto";
-import "google/protobuf/timestamp.proto";
-*/
-message CreateRequest {
- string Name = 1;
- string Access = 2;
+
+message DeployRequest {
+ string DownloadURL=1;
+ string Binary=2;
+ repeated string Args=3;
+ string Repository=4;
+ uint64 BuildID=5;
+}
+enum DeploymentStatus {
+// nothing happened yet
+ PREPARING=0;
+ // forked, exec'ed, waiting for startup message
+ STARTING=1;
+ // downloading binaries
+ DOWNLOADING=2;
+ // gathering resources (e.g. ports)
+ RESOURCING=3;
+ // startup message done, handed control to application
+ EXECUSER=4;
+ TERMINATED=5;
 }
 
-message CreateResponse {
- string Certificate=1;
+message DeployResponse {
+// the local ports chosen for the application
+repeated uint32 Ports=1;
+// the user this application runs as
+string userid=2;
 }
 
-message PingRequest {}
-message PingResponse {}
+message EmptyResponse{}
+message TerminationRequest {
+string Msgid=1;
+bool Failed=2;
+}
+message StartedRequest {
+string Msgid=1;
+}
+message StartupRequest {
+string Msgid=1;
+}
 
-service VpnManager {
- rpc CreateVpn(CreateRequest) returns (CreateResponse){
-     option (google.api.http) = { get: "/vpnmgr/v1/vpn/certificate" };
- }
+message StartupResponse {
+string URL=1;
+string Binary=2;
+repeated string Args=3;
+string WorkingDir=4;
+}
 
- rpc Ping(PingRequest) returns (PingResponse) {
-     option (google.api.http) = { get: "/vpnmgr/v1/ping" };
- }
+message ResourceRequest {
+string Msgid=1;
+int32 Ports=2;
+}
+message ResourceResponse {
+repeated int32 Ports=1;
+}
 
- /*
- option(google.api.http) = {
-   post: "/v1/echo"
-   body: "*"
- };
- }
- */
+service AutoDeployer {
+// deploy an application
+rpc Deploy(DeployRequest) returns (DeployResponse);
+
+// once we re-executed ourselves, we send this message to our selves
+rpc InternalStartup(StartupRequest) returns (StartupResponse);
+rpc AllocResources(ResourceRequest) returns (ResourceResponse);
+rpc Terminated(TerminationRequest) returns (EmptyResponse);
+rpc Started(StartedRequest) returns (EmptyResponse);
 }

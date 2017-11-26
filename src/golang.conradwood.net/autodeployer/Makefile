@@ -6,7 +6,7 @@ PROTOCINC += -I${GOPATH}/src/golang.conradwood.net/vendor/github.com/googleapis/
 PROTOCINC += -I${GOPATH}/src/golang.conradwood.net/vendor/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis
 
 server:
-	go install autodeployer-server.go
+	go install autodeployer-server.go random.go linereader.go starter.go
 client:
 	go install autodeployer-client.go
 
