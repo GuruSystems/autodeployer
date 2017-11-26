@@ -322,12 +322,36 @@ func entryByMsg(msgid string) *Deployed {
 // given a list of users will pick one that is currently not used for deployment
 // returns username
 func allocUser(users []*user.User) *Deployed {
-	for _, u := range users {
-		d := entryForUser(u)
-		if d.idle {
-			d.idle = false
-			d.status = pb.DeploymentStatus_PREPARING
-			return d
+	needclean := true
+	for {
+		for _, u := range users {
+			d := entryForUser(u)
+			if d.idle {
+				d.idle = false
+				d.status = pb.DeploymentStatus_PREPARING
+				return d
+			}
+		}
+		// if we find nothing, we'll clean out old terminated tasks
+		if needclean {
+			needclean = false
+			for _, d := range deployed {
+				if d.status != pb.DeploymentStatus_TERMINATED {
+					continue
+				}
+				if d.idle == true {
+					continue
+				}
+				// terminated and not idle
+				if time.Since(d.finished) > (5 * time.Minute) {
+					// and that for some time...
+					d.idle = true
+					needclean = true
+					break
+				}
+			}
+		} else {
+			return nil
 		}
 	}
 	return nil
