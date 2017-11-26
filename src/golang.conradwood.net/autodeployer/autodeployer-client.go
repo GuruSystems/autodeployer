@@ -1,13 +1,10 @@
 package main
 
-// see: https://grpc.io/docs/tutorials/basic/go.html
+// instruct the autodeployer on a given server to download & deploy stuff
 
 import (
-	"fmt"
-	//"google.golang.org/grpc"
-	//	"github.com/golang/protobuf/proto"
 	"flag"
-	//	"net"
+	"fmt"
 	pb "golang.conradwood.net/autodeployer/proto"
 	"golang.conradwood.net/client"
 )
