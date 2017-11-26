@@ -1,0 +1,25 @@
+
+syntax = "proto3";
+
+package user;
+
+import "google/api/annotations.proto";
+
+message GetUserDetailRequest {
+string UserID=1;
+string AccessToken=2;
+}
+messge GetUserDetailResponse {
+string UserID=1;
+string Firstname=2;
+string Lastname=3;
+repeated string AccessTokens=4;
+string Email=5;
+}
+
+service UserAttributeService {
+// Gets details about a user, e.g. "Firstname" or so (but not passwords! - see auth package)
+ rpc GetUserDetail(GetUserDetailRequest) returns (GetUserDetailResponse) {}
+ rpc SetUserDetail(SetUserDetailRequest) returns (SetUserDetailResponse) {}
+ rpc AddUserToken(AddTokenRequest) returns (AddTokenResponse) {}
+}

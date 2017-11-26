@@ -1,0 +1,27 @@
+
+syntax = "proto3";
+
+package h5n2;
+
+import "google/api/annotations.proto";
+
+message PutRequest {
+ string Key = 1;
+ string Value = 2;
+}
+ 
+message PutResponse {}
+
+message GetRequest {
+ string Key = 1;
+}
+message GetResponse {
+string Key = 1;
+string Value = 2;
+}
+
+
+service H5N2Service {
+ rpc Put(PutRequest) returns (PutResponse);
+ rpc Get(GetRequest) returns (GetResponse) ;
+}
