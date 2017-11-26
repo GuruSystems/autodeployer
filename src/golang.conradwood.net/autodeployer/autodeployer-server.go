@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -32,6 +33,7 @@ var (
 	msgid    = flag.String("msgid", "", "A msgid indicating that we've been forked() and execing the command. used internally only")
 	port     = flag.Int("port", 4000, "The server port")
 	deployed []*Deployed
+	portLock = new(sync.Mutex)
 )
 
 // information about a currently deployed application
@@ -51,6 +53,8 @@ type Deployed struct {
 	args       []string
 	workingDir string
 	Stdout     io.Reader
+	started    time.Time
+	finished   time.Time
 }
 
 // callback from the compound initialisation
@@ -117,6 +121,7 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 		fmt.Printf("User %s\n", un)
 	}
 	du := allocUser(users)
+	du.started = time.Now()
 	du.repo = cr.Repository
 	du.build = cr.BuildID
 	_, wd := filepath.Split(du.user.HomeDir)
@@ -210,6 +215,7 @@ func (s *AutoDeployer) Terminated(ctx context.Context, cr *pb.TerminationRequest
 	} else {
 		fmt.Printf("Child reports: %s exited.\n", d.toString())
 	}
+	d.finished = time.Now()
 	d.status = pb.DeploymentStatus_TERMINATED
 	return &pb.EmptyResponse{}, nil
 }
@@ -232,6 +238,7 @@ func waitForCommand(du *Deployed) {
 		}
 	}
 	err := du.cmd.Wait()
+	du.finished = time.Now()
 	du.status = pb.DeploymentStatus_TERMINATED
 	if du.exitCode == nil {
 		du.exitCode = err
@@ -245,12 +252,45 @@ func waitForCommand(du *Deployed) {
 
 func (s *AutoDeployer) AllocResources(ctx context.Context, cr *pb.ResourceRequest) (*pb.ResourceResponse, error) {
 	res := &pb.ResourceResponse{}
+	d := entryByMsg(cr.Msgid)
+	if d == nil {
+		return nil, errors.New("No such deployment")
+	}
+	portLock.Lock()
 	// lock this!
-	res.Ports = append(res.Ports, 6021)
-	res.Ports = append(res.Ports, 6022)
-	res.Ports = append(res.Ports, 6023)
+	for i := 0; i < int(cr.Ports); i++ {
+		res.Ports = append(res.Ports, allocPort(d))
+	}
+	portLock.Unlock()
 	// unlock
 	return res, nil
+}
+
+// we assume stuff is locked !
+func allocPort(du *Deployed) int32 {
+	startPort := 4100
+	endPort := 7000
+	for i := startPort; i < endPort; i++ {
+		if !isPortInUse(i) {
+			du.ports = append(du.ports, i)
+			return int32(i)
+		}
+	}
+	return 0
+}
+func isPortInUse(port int) bool {
+	for _, d := range deployed {
+		if d.idle {
+			continue
+		}
+		for _, p := range d.ports {
+			if p == port {
+				return true
+			}
+		}
+
+	}
+	return false
 }
 
 /**********************************
