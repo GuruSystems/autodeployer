@@ -81,6 +81,13 @@ func main() {
 		// testing
 		go testing()
 	}
+
+	// we are brutal - if we startup we slay all deployment users
+	users := getListOfUsers()
+	for _, un := range users {
+		Slay(un.Username)
+	}
+
 	sd := server.ServerDef{
 		Port: *port,
 	}
@@ -300,16 +307,18 @@ func waitForCommand(du *Deployed) {
 		fmt.Printf("Exited normally: %s\n", du.toString())
 	}
 
+	Slay(du.user.Username)
+}
+func Slay(username string) {
 	// we clean up - to make sure we really really release resources, we "slay" the user
-	cmd := exec.Command("/usr/sbin/slay", "-clean", du.user.Username)
-	fmt.Printf("Slaying process of user %s\n", du.user.Username)
-	err = cmd.Run()
+	cmd := exec.Command("/usr/sbin/slay", "-clean", username)
+	fmt.Printf("Slaying process of user %s\n", username)
+	err := cmd.Run()
 	if err != nil {
 		fmt.Printf("Slay failed: %s\n", err)
 	} else {
-		fmt.Printf("Slay %s done\n", du.user.Username)
+		fmt.Printf("Slay %s done\n", username)
 	}
-
 }
 
 func (s *AutoDeployer) AllocResources(ctx context.Context, cr *pb.ResourceRequest) (*pb.ResourceResponse, error) {
