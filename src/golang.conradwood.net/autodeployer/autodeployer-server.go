@@ -150,6 +150,8 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	gid, _ := strconv.Atoi(du.user.Gid)
 	err := createWorkingDirectory(wd, uid, gid)
 	if err != nil {
+		du.status = pb.DeploymentStatus_TERMINATED
+		du.exitCode = err
 		fmt.Printf("Failed to create working directory %s: %s\n", wd, err)
 		return nil, err
 	}
