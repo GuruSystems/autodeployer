@@ -71,9 +71,12 @@ func Execute() {
 		fmt.Printf("Failed to alloc resources: %s\n", err)
 		os.Exit(10)
 	}
-	fmt.Printf("Start commandline: %s %v (%d ports)\n", srp.Binary, srp.Args, ports)
+	fmt.Printf("Start commandline: %s %v (%d ports)\n", binary, srp.Args, ports)
 	rArgs := replacePorts(srp.Args, resources.Ports)
-	fmt.Printf("Start commandline: %s %v (%d ports)\n", srp.Binary, rArgs, ports)
+	fmt.Printf("Starting binary \"%s\" with %d args:\n", binary, len(srp.Args))
+	for _, s := range rArgs {
+		fmt.Printf("Arg: \"%s\"\n", s)
+	}
 	path := "./"
 	fullb := fmt.Sprintf("%s/%s", path, binary)
 	err = os.Chmod(fullb, 0500)
@@ -96,8 +99,12 @@ func Execute() {
 		fmt.Printf("Failed to inform daemon about pending startup. aborting. (%s)\n", err)
 		os.Exit(10)
 	}
-	cmd.Wait()
-	fmt.Printf("Command completed: %s\n", err)
+	err = cmd.Wait()
+	if err == nil {
+		fmt.Printf("Command completed with no error\n")
+	} else {
+		fmt.Printf("Command completed: %s\n", err)
+	}
 	failed := err != nil
 	cl.Terminated(ctx, &pb.TerminationRequest{Msgid: *msgid, Failed: failed})
 	os.Exit(0)
