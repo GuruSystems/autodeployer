@@ -1,9 +1,15 @@
-
 syntax = "proto3";
 
 package deploymonkey;
 
 import "google/api/annotations.proto";
+
+// the normal, intended flow is like so:
+// 1. the deploymonkey is configured with a group of applications,
+//    in its simplest form it's a single application
+// 2. each build calls UpdateApp with the buildid of the new build
+// 3. -> goto 2
+
 
 message ApplicationDefinition {
  string DownloadURL=1;
@@ -16,21 +22,26 @@ message ApplicationDefinition {
 }
 
 // a group consists of one or more applications
-// and a key and a name.
+// and a key (chosen by the creator)
 // if a group with a given key is redefined, all previous
 // instances of software in this group will be shutdown
 // any group can only have one application of a given repository
 // in its group
 message GroupDefinitionRequest {
  string GroupID=1;
- string GroupName=2;
- repeated ApplicationDefinition Applications=3;
+ repeated ApplicationDefinition Applications=2;
 }
 
+message UpdateAppRequest {
+string GroupID=1;
+string Repository=2;
+uint64 BuildID=8;
+}
 
 
 message EmptyResponse {}
 
 service DeployMonkey {
 rpc DefineGroup(GroupDefinitionRequest) returns (EmptyResponse);
+rpc UpdateApp(UpdateAppRequest) returns (EmptyResponse);
 }

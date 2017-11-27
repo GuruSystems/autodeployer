@@ -144,7 +144,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 }
 
 func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
-	fmt.Printf("Invoke %s\n", method)
+	//	fmt.Printf("CNW: Invoke %s\n", method)
 	c := defaultCallInfo()
 	mc := cc.GetMethodConfig(method)
 	if mc.WaitForReady != nil {
@@ -160,7 +160,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 	opts = append(cc.dopts.callOptions, opts...)
 	for _, o := range opts {
 		if err := o.before(c); err != nil {
-			fmt.Printf("1. Invoke %s failed:%s\n", method, err)
+			fmt.Printf("CNW: 1. Invoke %s failed:%s\n", method, err)
 			return toRPCErr(err)
 		}
 	}
@@ -235,7 +235,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 
 		t, done, err = cc.getTransport(ctx, c.failFast)
 		if err != nil {
-			fmt.Printf("2. Invoke %s failed:%s\n", method, err)
+			fmt.Printf("CNW: 2. Invoke %s failed:%s\n", method, err)
 			// TODO(zhaoq): Probably revisit the error handling.
 			if _, ok := status.FromError(err); ok {
 				return err
@@ -254,7 +254,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		stream, err = t.NewStream(ctx, callHdr)
 		if err != nil {
-			fmt.Printf("3. Invoke %s failed:%s\n", method, err)
+			fmt.Printf("CNW: 3. Invoke %s failed:%s\n", method, err)
 			if done != nil {
 				if _, ok := err.(transport.ConnectionError); ok {
 					// If error is connection error, transport was sending data on wire,
@@ -274,7 +274,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		err = sendRequest(ctx, cc.dopts, cc.dopts.cp, c, callHdr, stream, t, args, topts)
 		if err != nil {
-			fmt.Printf("4. Invoke %s failed:%s\n", method, err)
+			fmt.Printf("CNW: 4. Invoke %s failed:%s\n", method, err)
 			if done != nil {
 				updateRPCInfoInContext(ctx, rpcInfo{
 					bytesSent:     stream.BytesSent(),
@@ -292,7 +292,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		err = recvResponse(ctx, cc.dopts, t, c, stream, reply)
 		if err != nil {
-			fmt.Printf("5. Invoke %s failed:%s\n", method, err)
+			fmt.Printf("CNW: 5. Invoke %s failed:%s\n", method, err)
 			if done != nil {
 				updateRPCInfoInContext(ctx, rpcInfo{
 					bytesSent:     stream.BytesSent(),
@@ -318,7 +318,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		err = stream.Status().Err()
 		if err != nil {
-			fmt.Printf("6. Invoke %s failed:%s\n", method, err)
+			fmt.Printf("CNW: 6. Invoke %s failed:%s\n", method, err)
 		}
 		return err
 	}

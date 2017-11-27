@@ -1,14 +1,9 @@
 package main
 
-// this is the main, privileged daemon. got to run as root because we're forking off
-// different users from here
-
-// fileaccess is split out to starter.go, which runs as an unprivileged user
-
-// (this is done by virtue of exec('su',Args[0]) )
-// the flag msgid goes into the startup code, so do not run the privileged daemon with that flag!
-
 import (
+	"database/sql"
+	_ "github.com/lib/pq"
+
 	"errors"
 	"flag"
 	"fmt"
@@ -20,7 +15,13 @@ import (
 
 // static variables for flag parser
 var (
-	port = flag.Int("port", 4000, "The server port")
+	port   = flag.Int("port", 4999, "The server port")
+	dbhost = flag.String("dbhost", "postgres", "hostname of the postgres database rdms")
+	dbdb   = flag.String("database", "deploymonkey", "database to use for authentication")
+	dbuser = flag.String("dbuser", "root", "username for the database to use for authentication")
+	dbpw   = flag.String("dbpw", "pw", "password for the database to use for authentication")
+	dbcon  *sql.DB
+	dbinfo string
 )
 
 // callback from the compound initialisation
@@ -48,13 +49,56 @@ func main() {
 }
 
 /**********************************
-* implementing the functions here:
+* implementing the postgres functions here:
+***********************************/
+func initDB() error {
+	var now string
+	if dbcon != nil {
+		return nil
+	}
+	host := *dbhost
+	username := *dbuser
+	database := *dbdb
+	password := *dbpw
+	fmt.Printf("Connecting to host %s\n", host)
+
+	dbinfo = fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=require",
+		host, username, password, database)
+	dbcon, err := sql.Open("postgres", dbinfo)
+	if err != nil {
+		fmt.Printf("Failed to connect to %s on host \"%s\" as \"%s\"\n", database, host, username)
+		return err
+	}
+	err = dbcon.QueryRow("SELECT NOW() as now").Scan(&now)
+	if err != nil {
+		fmt.Printf("Failed to scan %s on host \"%s\" as \"%s\"\n", database, host, username)
+		return err
+	}
+	fmt.Printf("Time in database: %s\n", now)
+	return nil
+}
+
+// get the group with given name from database. if no such group will return nil
+func getGroupFromDatabase(groupName string) (*pb.GroupDefinitionRequest, error) {
+
+}
+
+/**********************************
+* implementing the server functions here:
 ***********************************/
 type DeployMonkey struct {
 	wtf int
 }
 
 func (s *DeployMonkey) DefineGroup(ctx context.Context, cr *pb.GroupDefinitionRequest) (*pb.EmptyResponse, error) {
+	err := initDB()
+	if err != nil {
+		return nil, err
+	}
 
+	return nil, errors.New("Deploy() in server - this codepath should never have been reached!")
+}
+func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (*pb.EmptyResponse, error) {
+	initDB()
 	return nil, errors.New("Deploy() in server - this codepath should never have been reached!")
 }

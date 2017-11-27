@@ -1,0 +1,4 @@
+1:CREATE SEQUENCE dbname_serial
+2:CREATE SEQUENCE appdef_serial
+3:CREATE TABLE appgroup ( id integer PRIMARY KEY DEFAULT nextval('dbname_serial'), groupname varchar(100) UNIQUE NOT NULL )
+3:CREATE TABLE appdef ( id integer PRIMARY KEY DEFAULT nextval('appdef_serial'), sourceurl varchar(255) NOT NULL UNIQUE, downloaduser varchar(255), downloadpw varchar(255),

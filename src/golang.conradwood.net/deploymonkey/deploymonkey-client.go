@@ -5,10 +5,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	pb "golang.conradwood.net/autodeployer/proto"
 	"golang.conradwood.net/client"
+	pb "golang.conradwood.net/deploymonkey/proto"
 	"google.golang.org/grpc"
-	"strings"
 )
 
 // static variables for flag parser
@@ -25,7 +24,7 @@ var (
 func main() {
 	flag.Parse()
 	grpc.EnableTracing = true
-	conn, err := client.DialWrapper("autodeployer.AutoDeployer")
+	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
 	if err != nil {
 		fmt.Println("failed to dial: %v", err)
 		return
@@ -33,24 +32,13 @@ func main() {
 	defer conn.Close()
 	ctx := client.SetAuthToken()
 
-	cl := pb.NewAutoDeployerClient(conn)
-	req := pb.DeployRequest{DownloadURL: *downloadurl,
-		Binary:           *binary,
-		BuildID:          uint64(*buildid),
-		DownloadUser:     *downloaduser,
-		DownloadPassword: *downloadpw,
-		Repository:       *repo}
-	if *paras != "" {
-		args := strings.Split(*paras, " ")
-		req.Args = args
+	cl := pb.NewDeployMonkeyClient(conn)
+	req := pb.GroupDefinitionRequest{
+		GroupID: "HelloWorldGroup",
 	}
-
-	for i, para := range req.Args {
-		fmt.Printf("Arg #%d %s\n", i, para)
-	}
-	resp, err := cl.Deploy(ctx, &req)
+	resp, err := cl.DefineGroup(ctx, &req)
 	if err != nil {
-		fmt.Printf("Failed to deploy %s-%d from %s: %s\n", req.Repository, req.BuildID, req.DownloadURL, err)
+		fmt.Printf("Failed to define group: %s\n", err)
 		return
 	}
 	fmt.Printf("Response to deploy: %v\n", resp)
