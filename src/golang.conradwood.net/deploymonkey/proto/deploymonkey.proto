@@ -1,0 +1,36 @@
+
+syntax = "proto3";
+
+package deploymonkey;
+
+import "google/api/annotations.proto";
+
+message ApplicationDefinition {
+ string DownloadURL=1;
+ string DownloadUser=2;
+ string DownloadPassword=3;
+ string Binary=4;
+ repeated string Args=5;
+ string Repository=6;
+ uint64 BuildID=7;
+}
+
+// a group consists of one or more applications
+// and a key and a name.
+// if a group with a given key is redefined, all previous
+// instances of software in this group will be shutdown
+// any group can only have one application of a given repository
+// in its group
+message GroupDefinitionRequest {
+ string GroupID=1;
+ string GroupName=2;
+ repeated ApplicationDefinition Applications=3;
+}
+
+
+
+message EmptyResponse {}
+
+service DeployMonkey {
+rpc DefineGroup(GroupDefinitionRequest) returns (EmptyResponse);
+}
