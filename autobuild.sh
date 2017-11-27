@@ -1,5 +1,11 @@
 #!/bin/sh
 # go insists on absolute path.
+
+export GOOS=linux
+export GOARCH=amd64
+
+
+
 export GOBIN=`pwd`/dist
 export GOPATH=`pwd`
 echo "GOPATH=$GOPATH"
