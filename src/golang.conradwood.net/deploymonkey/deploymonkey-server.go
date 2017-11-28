@@ -80,6 +80,7 @@ func initDB() error {
 
 // get the group with given name from database. if no such group will return nil
 func getGroupFromDatabase(groupName string) (*pb.GroupDefinitionRequest, error) {
+	return nil, nil
 
 }
 
