@@ -174,7 +174,7 @@ func createGroupVersion(nameSpace string, groupName string, def []*pb.Applicatio
 			return "", errors.New(fmt.Sprintf("Failed to add application to new version: %s", err))
 		}
 	}
-	return "", nil
+	return fmt.Sprintf("%d", versionId), nil
 }
 
 func saveApp(app *pb.ApplicationDefinition) (string, error) {
@@ -222,12 +222,14 @@ func (s *DeployMonkey) DefineGroup(ctx context.Context, cr *pb.GroupDefinitionRe
 	for _, dg := range diff.AppDiffs {
 		fmt.Printf("Update: %s\n", dg.Describe())
 	}
-	_, err = createGroupVersion(cr.Namespace, cr.GroupID, cr.Applications)
+	vid, err := createGroupVersion(cr.Namespace, cr.GroupID, cr.Applications)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Failed to create new version: %s", err))
 	}
 	// we do have diffs, so create a new version and put the new definition in to the database
-	r := pb.GroupDefResponse{Result: pb.GroupResponseStatus_CHANGEACCEPTED}
+	r := pb.GroupDefResponse{Result: pb.GroupResponseStatus_CHANGEACCEPTED,
+		VersionID: vid,
+	}
 	return &r, nil
 }
 func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (*pb.EmptyResponse, error) {
