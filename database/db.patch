@@ -1,4 +1,18 @@
-1:CREATE SEQUENCE dbname_serial
-2:CREATE SEQUENCE appdef_serial
-3:CREATE TABLE appgroup ( id integer PRIMARY KEY DEFAULT nextval('dbname_serial'), groupname varchar(100) UNIQUE NOT NULL )
-3:CREATE TABLE appdef ( id integer PRIMARY KEY DEFAULT nextval('appdef_serial'), sourceurl varchar(255) NOT NULL UNIQUE, downloaduser varchar(255), downloadpw varchar(255),
+CREATE SEQUENCE dbname_serial
+
+CREATE SEQUENCE appdef_serial
+
+CREATE SEQUENCE lnk_app_grp_serial
+
+CREATE SEQUENCE grp_version_serial
+
+# a group of apps (versioned)
+CREATE TABLE appgroup ( id integer PRIMARY KEY DEFAULT nextval('dbname_serial'), groupname varchar(100) UNIQUE NOT NULL, deployedversion integer  )
+
+CREATE TABLE appdef ( id integer PRIMARY KEY DEFAULT nextval('appdef_serial'), sourceurl varchar(255) NOT NULL, downloaduser varchar(255), downloadpw varchar(255),executable varchar(255) NOT NULL, repo varchar(255) NOT NULL, buildid integer not null)
+
+# groups are versioned..
+CREATE TABLE group_version ( id integer PRIMARY KEY DEFAULT nextval('grp_version_serial'), group_id integer NOT NULL references appgroup(id)  )
+
+# linking apps and group versions
+CREATE TABLE lnk_app_grp ( id integer PRIMARY KEY DEFAULT nextval('lnk_app_grp_serial'), group_version_id integer NOT NULL references group_version(id), app_id integer NOT NULL references appdef(id), unique (group_version_id,app_id) )
