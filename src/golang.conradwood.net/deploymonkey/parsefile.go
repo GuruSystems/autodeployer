@@ -25,6 +25,12 @@ func ParseFile(fname string) (*FileDef, error) {
 		fmt.Printf("Failed to parse file %s: %s\n", fname, err)
 		return nil, err
 	}
+	// apply namespace throughout
+	for _, x := range gd.Groups {
+		if x.Namespace == "" {
+			x.Namespace = gd.Namespace
+		}
+	}
 	fmt.Printf("Found %d groups in file %s\n", len(gd.Groups), fname)
 	fmt.Printf("Namespace: %s\n", gd.Namespace)
 	for _, x := range gd.Groups {

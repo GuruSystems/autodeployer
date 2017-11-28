@@ -19,6 +19,7 @@ message ApplicationDefinition {
  repeated string Args=5;
  string Repository=6;
  uint64 BuildID=7;
+ uint32 Instances=8;
 }
 
 // a group consists of one or more applications
@@ -28,8 +29,9 @@ message ApplicationDefinition {
 // any group can only have one application of a given repository
 // in its group
 message GroupDefinitionRequest {
- string GroupID=1;
- repeated ApplicationDefinition Applications=2;
+ string Namespace=1;
+ string GroupID=2;
+ repeated ApplicationDefinition Applications=3;
 }
 
 message UpdateAppRequest {
@@ -41,7 +43,21 @@ uint64 BuildID=8;
 
 message EmptyResponse {}
 
+enum GroupResponseStatus {
+// attempt to define a group that exists just like that
+NOCHANGE=0;
+// change detected and accepted
+CHANGEACCEPTED=1;
+// change detected but not accepted (permissions? protected group?)
+CHANGEREJECTED=2;
+}
+message GroupDefResponse {
+repeated string Advice=1;
+repeated string DefID=2;
+
+}
+
 service DeployMonkey {
-rpc DefineGroup(GroupDefinitionRequest) returns (EmptyResponse);
+rpc DefineGroup(GroupDefinitionRequest) returns (GroupDefResponse);
 rpc UpdateApp(UpdateAppRequest) returns (EmptyResponse);
 }

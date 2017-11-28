@@ -59,6 +59,15 @@ func importFile(filename string) {
 		fmt.Printf("Failed to parse file %s: %s\n", filename, err)
 		return
 	}
+	dm := new(DeployMonkey)
+	for _, gdr := range fd.Groups {
+		fmt.Printf("Group: %s\n", gdr.GroupID)
+		_, err := dm.DefineGroup(nil, &gdr)
+		if err != nil {
+			fmt.Printf("Failed to manage group %s: %s\n", gdr.GroupID, err)
+			return
+		}
+	}
 	fmt.Printf("File parsed.\n")
 
 }
@@ -67,6 +76,7 @@ func importFile(filename string) {
 * implementing the postgres functions here:
 ***********************************/
 func initDB() error {
+	var err error
 	var now string
 	if dbcon != nil {
 		return nil
@@ -79,7 +89,7 @@ func initDB() error {
 
 	dbinfo = fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=require",
 		host, username, password, database)
-	dbcon, err := sql.Open("postgres", dbinfo)
+	dbcon, err = sql.Open("postgres", dbinfo)
 	if err != nil {
 		fmt.Printf("Failed to connect to %s on host \"%s\" as \"%s\"\n", database, host, username)
 		return err
@@ -94,14 +104,23 @@ func initDB() error {
 }
 
 // get the group with given name from database. if no such group will return nil
-func getGroupFromDatabase(groupName string) (*pb.GroupDefinitionRequest, error) {
+func getGroupFromDatabase(nameSpace string, groupName string) (*pb.GroupDefinitionRequest, error) {
 	var deplVers int
 	res := pb.GroupDefinitionRequest{}
-	err := dbcon.QueryRow("SELECT groupname,deployedversion from appgroup where groupname=$1", groupName).Scan(&res.GroupID, &deplVers)
+	res.Namespace = nameSpace
+	rows, err := dbcon.Query("SELECT groupname,deployedversion from appgroup where groupname=$1", groupName)
 	if err != nil {
 		fmt.Printf("Failed to get groupname %s\n", groupName)
 		return nil, err
 	}
+	for rows.Next() {
+		err := rows.Scan(&res.GroupID, &deplVers)
+		if err != nil {
+			fmt.Printf("Failed to get row for groupname %s\n", groupName)
+			return nil, err
+		}
+	}
+
 	return &res, nil
 
 }
@@ -113,12 +132,22 @@ type DeployMonkey struct {
 	wtf int
 }
 
-func (s *DeployMonkey) DefineGroup(ctx context.Context, cr *pb.GroupDefinitionRequest) (*pb.EmptyResponse, error) {
+func (s *DeployMonkey) DefineGroup(ctx context.Context, cr *pb.GroupDefinitionRequest) (*pb.GroupDefResponse, error) {
 	err := initDB()
 	if err != nil {
 		return nil, err
 	}
-
+	cur, err := getGroupFromDatabase(cr.Namespace, cr.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	diff, err := Compare(cur, cr)
+	if err != nil {
+		return nil, err
+	}
+	for _, dg := range diff.AppDiffs {
+		fmt.Printf("Update: %s\n", dg.Describe())
+	}
 	return nil, errors.New("Deploy() in server - this codepath should never have been reached!")
 }
 func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (*pb.EmptyResponse, error) {
