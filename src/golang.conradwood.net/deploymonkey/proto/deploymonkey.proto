@@ -54,6 +54,7 @@ CHANGEREJECTED=2;
 message GroupDefResponse {
 repeated string Advice=1;
 repeated string DefID=2;
+GroupResponseStatus Result=3;
 
 }
 

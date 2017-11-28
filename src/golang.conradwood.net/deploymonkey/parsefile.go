@@ -9,7 +9,7 @@ import (
 
 type FileDef struct {
 	Namespace string
-	Groups    []pb.GroupDefinitionRequest
+	Groups    []*pb.GroupDefinitionRequest
 }
 
 func ParseFile(fname string) (*FileDef, error) {
@@ -35,6 +35,7 @@ func ParseFile(fname string) (*FileDef, error) {
 	fmt.Printf("Namespace: %s\n", gd.Namespace)
 	for _, x := range gd.Groups {
 		fmt.Printf("  Group: %s with %d applications\n", x.GroupID, len(x.Applications))
+		fmt.Printf("        Namespace  : %s\n", x.Namespace)
 		for _, a := range x.Applications {
 			fmt.Printf("        Application: \n")
 			fmt.Printf("           Repo  : %s\n", a.Repository)
