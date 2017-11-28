@@ -11,6 +11,7 @@ import (
 	"golang.conradwood.net/server"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"os"
 )
 
 // static variables for flag parser
@@ -20,6 +21,7 @@ var (
 	dbdb   = flag.String("database", "deploymonkey", "database to use for authentication")
 	dbuser = flag.String("dbuser", "root", "username for the database to use for authentication")
 	dbpw   = flag.String("dbpw", "pw", "password for the database to use for authentication")
+	file   = flag.String("filename", "", "filename with a group definition (for testing)")
 	dbcon  *sql.DB
 	dbinfo string
 )
@@ -34,7 +36,11 @@ func st(server *grpc.Server) error {
 
 func main() {
 	flag.Parse() // parse stuff. see "var" section above
-
+	if *file != "" {
+		ParseFile(*file)
+		fmt.Printf("File parsed.\n")
+		os.Exit(0)
+	}
 	sd := server.ServerDef{
 		Port: *port,
 	}
@@ -80,7 +86,14 @@ func initDB() error {
 
 // get the group with given name from database. if no such group will return nil
 func getGroupFromDatabase(groupName string) (*pb.GroupDefinitionRequest, error) {
-	return nil, nil
+	var deplVers int
+	res := pb.GroupDefinitionRequest{}
+	err := dbcon.QueryRow("SELECT groupname,deployedversion from appgroup where groupname=$1", groupName).Scan(&res.GroupID, &deplVers)
+	if err != nil {
+		fmt.Printf("Failed to get groupname %s\n", groupName)
+		return nil, err
+	}
+	return &res, nil
 
 }
 

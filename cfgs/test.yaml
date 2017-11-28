@@ -1,0 +1,9 @@
+namespace: kpitracker
+groups:
+  - groupid: testing
+    applications:
+      - { repository: kpitracker, binary: executable }
+  - groupid: othergroup
+    applications:
+      - { repository: bla, binary: executable }
+      - { repository: xbla, binary: executable2 }
