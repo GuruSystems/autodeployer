@@ -37,8 +37,7 @@ func st(server *grpc.Server) error {
 func main() {
 	flag.Parse() // parse stuff. see "var" section above
 	if *file != "" {
-		ParseFile(*file)
-		fmt.Printf("File parsed.\n")
+		importFile(*file)
 		os.Exit(0)
 	}
 	sd := server.ServerDef{
@@ -51,6 +50,16 @@ func main() {
 	}
 	fmt.Printf("Done\n")
 	return
+
+}
+
+func importFile(filename string) {
+	fd, err := ParseFile(filename)
+	if err != nil {
+		fmt.Printf("Failed to parse file %s: %s\n", filename, err)
+		return
+	}
+	fmt.Printf("File parsed.\n")
 
 }
 
