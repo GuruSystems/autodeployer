@@ -107,13 +107,13 @@ func initDB() error {
 }
 
 type DBGroup struct {
-	id       int
-	groupDef *pb.GroupDefinitionRequest
+	id              int
+	DeployedVersion int
+	groupDef        *pb.GroupDefinitionRequest
 }
 
 // get the group with given name from database. if no such group will return nil
 func getGroupFromDatabase(nameSpace string, groupName string) (*DBGroup, error) {
-	var deplVers int
 	res := pb.GroupDefinitionRequest{}
 	d := DBGroup{}
 	res.Namespace = nameSpace
@@ -123,7 +123,7 @@ func getGroupFromDatabase(nameSpace string, groupName string) (*DBGroup, error) 
 		return nil, err
 	}
 	for rows.Next() {
-		err := rows.Scan(&d.id, &res.GroupID, &deplVers)
+		err := rows.Scan(&d.id, &res.GroupID, &d.DeployedVersion)
 		if err != nil {
 			fmt.Printf("Failed to get row for groupname %s\n", groupName)
 			return nil, err
@@ -188,6 +188,32 @@ func saveApp(app *pb.ApplicationDefinition) (string, error) {
 	return fmt.Sprintf("%d", id), nil
 }
 
+// given a group version will load all its apps into objects
+func loadAppGroupVersion(version int) ([]*pb.ApplicationDefinition, error) {
+	var res []*pb.ApplicationDefinition
+	rows, err := dbcon.Query("SELECT sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances from appdef, lnk_app_grp where appdef.id = lnk_app_grp.app_id and lnk_app_grp.group_version_id = $1", version)
+	if err != nil {
+		fmt.Printf("Failed to get apps for version %d:%s\n", version, err)
+		return nil, err
+	}
+	for rows.Next() {
+		r, err := loadApp(rows)
+		if err != nil {
+			fmt.Printf("Failed to get app for version %d:%s\n", version, err)
+			return nil, err
+		}
+		res = append(res, r)
+	}
+	return res, nil
+}
+
+// turns a database row into an applicationdefinition object
+func loadApp(row *sql.Rows) (*pb.ApplicationDefinition, error) {
+	res := pb.ApplicationDefinition{}
+
+	return &res
+}
+
 /**********************************
 * implementing the server functions here:
 ***********************************/
@@ -209,6 +235,10 @@ func (s *DeployMonkey) DefineGroup(ctx context.Context, cr *pb.GroupDefinitionRe
 	cur, err := getGroupFromDatabase(cr.Namespace, cr.GroupID)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Failed to get group from db: %s", err))
+	}
+	apps, err := loadAppGroupVersion(cur.DeployedVersion)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Failed to get apps for version %d from db: %s", cur.DeployedVersion, err))
 	}
 	diff, err := Compare(cur.groupDef, cr)
 	if err != nil {

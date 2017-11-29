@@ -16,3 +16,8 @@ CREATE TABLE group_version ( id integer PRIMARY KEY DEFAULT nextval('grp_version
 
 # linking apps and group versions
 CREATE TABLE lnk_app_grp ( id integer PRIMARY KEY DEFAULT nextval('lnk_app_grp_serial'), group_version_id integer NOT NULL references group_version(id), app_id integer NOT NULL references appdef(id), unique (group_version_id,app_id) )
+
+# args for the apps
+CREATE SEQUENCE args_serial
+
+CREATE TABLE args ( id integer PRIMARY KEY DEFAULT nextval('args_serial'), argument varchar(100) NOT NULL, app_id integer NOT NULL references appdef(id) )
