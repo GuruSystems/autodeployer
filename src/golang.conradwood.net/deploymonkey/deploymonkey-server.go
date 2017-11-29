@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"os"
+	"strconv"
 )
 
 // static variables for flag parser
@@ -65,9 +66,21 @@ func importFile(filename string) {
 	dm := new(DeployMonkey)
 	for _, gdr := range fd.Groups {
 		fmt.Printf("Group: %s\n", gdr.GroupID)
-		_, err := dm.DefineGroup(nil, gdr)
+		gresp, err := dm.DefineGroup(nil, gdr)
 		if err != nil {
 			fmt.Printf("Failed to manage group %s: %s\n", gdr.GroupID, err)
+			return
+		}
+		fmt.Printf("Result: %s\n", gresp.Result)
+		if gresp.Result == pb.GroupResponseStatus_NOCHANGE {
+			fmt.Printf("Aborted\n")
+			return
+		}
+		fmt.Printf("Deploying:\n")
+		dr := pb.DeployRequest{VersionID: gresp.VersionID}
+		_, err = dm.DeployVersion(nil, &dr)
+		if err != nil {
+			fmt.Printf("Failed to deploy group %s (version %d): %s\n", gdr.GroupID, gresp.VersionID, err)
 			return
 		}
 	}
@@ -161,7 +174,7 @@ func createGroupVersion(nameSpace string, groupName string, def []*pb.Applicatio
 		return "", errors.New(fmt.Sprintf("Failed to insert application: %s", err))
 	}
 	versionId := id
-	fmt.Printf("New Version: %d\n", versionId)
+	fmt.Printf("New Version: %d for Group #%d\n", versionId, r.id)
 	for _, ad := range def {
 		fmt.Printf("Saving: %v\n", ad)
 		id, err := saveApp(ad)
@@ -210,8 +223,32 @@ func loadAppGroupVersion(version int) ([]*pb.ApplicationDefinition, error) {
 // turns a database row into an applicationdefinition object
 func loadApp(row *sql.Rows) (*pb.ApplicationDefinition, error) {
 	res := pb.ApplicationDefinition{}
+	row.Scan(&res.DownloadURL, &res.DownloadUser, &res.DownloadPassword,
+		&res.Binary, &res.Repository, &res.BuildID, &res.Instances)
+	return &res, nil
+}
 
-	return &res
+// get group id from version
+func getGroupIDFromVersion(v int) (int, error) {
+	var groupid int
+	err := dbcon.QueryRow("select group_id from group_version where id = $1", v).Scan(&groupid)
+	if err != nil {
+		return 0, err
+	}
+	return groupid, nil
+}
+
+// update the deployed version of a group (group referred to by version!)
+func updateDeployedVersionNumber(v int) error {
+	gid, err := getGroupIDFromVersion(v)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Invalid Group-Version: \"%d\": %s", v, err))
+	}
+	_, err = dbcon.Exec("update appgroup set deployedversion = $1 where id = $2", v, gid)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Unable to update group: %s", err))
+	}
+	return nil
 }
 
 /**********************************
@@ -240,6 +277,9 @@ func (s *DeployMonkey) DefineGroup(ctx context.Context, cr *pb.GroupDefinitionRe
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Failed to get apps for version %d from db: %s", cur.DeployedVersion, err))
 	}
+	cur.groupDef.Applications = apps
+	fmt.Printf("Loaded Group from database: \n")
+	PrintGroup(cur.groupDef)
 	diff, err := Compare(cur.groupDef, cr)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Failed to compare: %s", err))
@@ -262,6 +302,19 @@ func (s *DeployMonkey) DefineGroup(ctx context.Context, cr *pb.GroupDefinitionRe
 	}
 	return &r, nil
 }
+func (s *DeployMonkey) DeployVersion(ctx context.Context, cr *pb.DeployRequest) (*pb.DeployResponse, error) {
+	if cr.VersionID == "" {
+		return nil, errors.New("VersionID required for deployment")
+	}
+	version, err := strconv.Atoi(cr.VersionID)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Invalid VersionID: \"%s\": %s", cr.VersionID, err))
+	}
+	updateDeployedVersionNumber(version)
+	r := pb.DeployResponse{}
+	return &r, nil
+}
+
 func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (*pb.EmptyResponse, error) {
 	initDB()
 	return nil, errors.New("Deploy() in server - this codepath should never have been reached!")

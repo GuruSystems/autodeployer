@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	pb "golang.conradwood.net/deploymonkey/proto"
 )
@@ -13,10 +14,37 @@ type Diff struct {
 	AppDiffs []AppDiff
 }
 
-// describe in human terms whas this diff represents!
+// describe in human terms what this diff represents!
 func (ad *AppDiff) Describe() string {
-	s := fmt.Sprintf("%v -> %v", ad.Was, ad.Is)
-	return s
+	var buf bytes.Buffer
+	if (ad.Was == nil) || (ad.Is == nil) {
+		s := fmt.Sprintf("%v -> %v", ad.Was, ad.Is)
+		return s
+	}
+
+	if ad.Is.DownloadURL != ad.Was.DownloadURL {
+		buf.WriteString(fmt.Sprintf("   DownloadURL %s -> %s ", ad.Is.DownloadURL, ad.Was.DownloadURL))
+	}
+	if ad.Is.DownloadUser != ad.Was.DownloadUser {
+		buf.WriteString(fmt.Sprintf("   DownloadUser %s -> %s ", ad.Is.DownloadUser, ad.Was.DownloadUser))
+	}
+
+	if ad.Is.DownloadPassword != ad.Was.DownloadPassword {
+		buf.WriteString(fmt.Sprintf("    DownloadPassword %s -> %s ", ad.Is.DownloadPassword, ad.Was.DownloadPassword))
+	}
+	if ad.Is.Binary != ad.Was.Binary {
+		buf.WriteString(fmt.Sprintf("    Binary %s -> %s ", ad.Is.Binary, ad.Was.Binary))
+	}
+	if ad.Is.BuildID != ad.Was.BuildID {
+		buf.WriteString(fmt.Sprintf("    BuildID %d -> %d ", ad.Is.BuildID, ad.Was.BuildID))
+	}
+	if ad.Is.Instances != ad.Was.Instances {
+		buf.WriteString(fmt.Sprintf("    Instances %s -> %s ", ad.Is.Instances, ad.Was.Instances))
+	}
+	if buf.String() == "" {
+		buf.WriteString(fmt.Sprintf("Weird.\nad1=%v\nad2=%v\n", ad.Is, ad.Was))
+	}
+	return fmt.Sprintf(" Difference (%v) %s", ad.Was, buf.String())
 }
 
 // compare groupdefinition request and work out the differences
@@ -27,13 +55,49 @@ func Compare(def1, def2 *pb.GroupDefinitionRequest) (*Diff, error) {
 	// 2. find all applications that exist in def2 but not def1
 	findNonExists(def2, def1, true, diff)
 	// 3. find all applications that exist in def1 and def2 but are different
-	// TODO
+	fmt.Printf("Checking wether applications are identical...\n")
+	for _, ad1 := range def1.Applications {
+		ad2 := findSame(def2, ad1)
+		if ad2 == nil {
+			continue
+		}
+		// here are the comparison snowflakes...
+		// if stuff isn't defined in the new group definition, then
+		// we copy from existing group definition as a default
+		// this is to avoid having to list a specific build id in a config file,
+		// we want the user to conveniently call "updateapp" with a buildid instead
+		// (the most common usecase)
+		if ad2.BuildID == 0 {
+			ad2.BuildID = ad1.BuildID
+		}
+		if ad2.Instances == 0 {
+			ad2.Instances = ad1.Instances
+		}
+		// end snowflakes
+		if isIdentical(ad1, ad2) {
+			continue
+		}
 
+		adiff := AppDiff{}
+		adiff.Is = ad1
+		adiff.Was = ad2
+		diff.AppDiffs = append(diff.AppDiffs, adiff)
+	}
 	fmt.Printf("Found %d differences:\n", len(diff.AppDiffs))
 	for _, x := range diff.AppDiffs {
 		fmt.Printf("Diff: %s\n", x.Describe())
 	}
 	return diff, nil
+}
+
+// find application ad in def2 (based on a call to isSame)
+func findSame(def *pb.GroupDefinitionRequest, ad *pb.ApplicationDefinition) *pb.ApplicationDefinition {
+	for _, ad2 := range def.Applications {
+		if isSame(ad2, ad) {
+			return ad2
+		}
+	}
+	return nil
 }
 
 // add all that exist in def1 but not in def2 to diff
@@ -61,6 +125,27 @@ func doesExistInDef(ad *pb.ApplicationDefinition, ads []*pb.ApplicationDefinitio
 	return false
 }
 
+// check if these two application definitions are identical
+// (in terms of actual deployment)
+func isIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
+	if (ad1.DownloadURL == ad2.DownloadURL) && (ad1.DownloadUser == ad2.DownloadUser) && (ad1.DownloadPassword == ad2.DownloadPassword) && (ad1.Binary == ad2.Binary) && (ad1.BuildID == ad2.BuildID) && (ad1.Instances == ad2.Instances) {
+		return true
+	}
+	return false
+	// is go that cool? Really?
+	// According to:
+	// https://golang.org/ref/spec#Comparison_operators
+	// "Struct values are comparable if all their fields are comparable"
+	// ...sounds nice :)
+
+	if ad1 == ad2 {
+		return true
+	}
+	return false
+
+}
+
+// check if this is the same application (but not necessarily identical)
 func isSame(ad1, ad2 *pb.ApplicationDefinition) bool {
 	if ad1.Repository != ad2.Repository {
 		return false

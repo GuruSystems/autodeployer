@@ -31,7 +31,11 @@ message ApplicationDefinition {
 message GroupDefinitionRequest {
  string Namespace=1;
  string GroupID=2;
- repeated ApplicationDefinition Applications=3;
+ // if we set a group as 'protected', then the deploymonkey
+ // won't allow a user to update it unless the user has a special
+ // authorisation. (To prevent accidental updates to 'live')
+ bool Protected=3;
+ repeated ApplicationDefinition Applications=4;
 }
 
 message UpdateAppRequest {
@@ -55,10 +59,16 @@ message GroupDefResponse {
 repeated string Advice=1;
 string VersionID=2;
 GroupResponseStatus Result=3;
-
 }
 
+message DeployRequest {
+string VersionID=1;
+}
+
+message DeployResponse {
+}
 service DeployMonkey {
 rpc DefineGroup(GroupDefinitionRequest) returns (GroupDefResponse);
+rpc DeployVersion(DeployRequest) returns (DeployResponse);
 rpc UpdateApp(UpdateAppRequest) returns (EmptyResponse);
 }
