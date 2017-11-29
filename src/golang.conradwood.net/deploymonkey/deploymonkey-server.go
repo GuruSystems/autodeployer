@@ -198,13 +198,19 @@ func saveApp(app *pb.ApplicationDefinition) (string, error) {
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("Failed to insert application: %s", err))
 	}
+	for _, arg := range app.Args {
+		_, err = dbcon.Exec("INSERT INTO args (argument,app_id) values ($1,$2)", arg, id)
+		if err != nil {
+			return "", errors.New(fmt.Sprintf("Failed to insert tag for app %d: %s", id, err))
+		}
+	}
 	return fmt.Sprintf("%d", id), nil
 }
 
 // given a group version will load all its apps into objects
 func loadAppGroupVersion(version int) ([]*pb.ApplicationDefinition, error) {
 	var res []*pb.ApplicationDefinition
-	rows, err := dbcon.Query("SELECT sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances from appdef, lnk_app_grp where appdef.id = lnk_app_grp.app_id and lnk_app_grp.group_version_id = $1", version)
+	rows, err := dbcon.Query("SELECT appdef.id,sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances from appdef, lnk_app_grp where appdef.id = lnk_app_grp.app_id and lnk_app_grp.group_version_id = $1", version)
 	if err != nil {
 		fmt.Printf("Failed to get apps for version %d:%s\n", version, err)
 		return nil, err
@@ -222,10 +228,39 @@ func loadAppGroupVersion(version int) ([]*pb.ApplicationDefinition, error) {
 
 // turns a database row into an applicationdefinition object
 func loadApp(row *sql.Rows) (*pb.ApplicationDefinition, error) {
+	var id int
 	res := pb.ApplicationDefinition{}
-	row.Scan(&res.DownloadURL, &res.DownloadUser, &res.DownloadPassword,
+	err := row.Scan(&id, &res.DownloadURL, &res.DownloadUser, &res.DownloadPassword,
 		&res.Binary, &res.Repository, &res.BuildID, &res.Instances)
+	if err != nil {
+		return nil, err
+	}
+	args, err := loadAppArgs(id)
+	if err != nil {
+		return nil, err
+	}
+	res.Args = args
 	return &res, nil
+}
+
+// turns a database row into an applicationdefinition object
+func loadAppArgs(id int) ([]string, error) {
+	var res []string
+	var s string
+	rows, err := dbcon.Query("SELECT argument from args where app_id = $1", id)
+	if err != nil {
+		s := fmt.Sprintf("Failed to get tags for app %d:%s\n", id, err)
+		return nil, errors.New(s)
+	}
+	for rows.Next() {
+		err = rows.Scan(&s)
+		if err != nil {
+			s := fmt.Sprintf("Failed to get tag for app %d:%s\n", id, err)
+			return nil, errors.New(s)
+		}
+		res = append(res, s)
+	}
+	return res, nil
 }
 
 // get group id from version

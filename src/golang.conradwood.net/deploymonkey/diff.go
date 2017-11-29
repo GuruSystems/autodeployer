@@ -41,6 +41,7 @@ func (ad *AppDiff) Describe() string {
 	if ad.Is.Instances != ad.Was.Instances {
 		buf.WriteString(fmt.Sprintf("    Instances %s -> %s ", ad.Is.Instances, ad.Was.Instances))
 	}
+	// TODO: display difference in args
 	if buf.String() == "" {
 		buf.WriteString(fmt.Sprintf("Weird.\nad1=%v\nad2=%v\n", ad.Is, ad.Was))
 	}
@@ -128,10 +129,21 @@ func doesExistInDef(ad *pb.ApplicationDefinition, ads []*pb.ApplicationDefinitio
 // check if these two application definitions are identical
 // (in terms of actual deployment)
 func isIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
-	if (ad1.DownloadURL == ad2.DownloadURL) && (ad1.DownloadUser == ad2.DownloadUser) && (ad1.DownloadPassword == ad2.DownloadPassword) && (ad1.Binary == ad2.Binary) && (ad1.BuildID == ad2.BuildID) && (ad1.Instances == ad2.Instances) {
-		return true
+	if (ad1.DownloadURL != ad2.DownloadURL) || (ad1.DownloadUser != ad2.DownloadUser) || (ad1.DownloadPassword != ad2.DownloadPassword) || (ad1.Binary != ad2.Binary) || (ad1.BuildID != ad2.BuildID) || (ad1.Instances != ad2.Instances) {
+		return false
 	}
-	return false
+	// check args
+	for _, a1 := range ad1.Args {
+		if !isStringInArray(a1, ad2.Args) {
+			return false
+		}
+	}
+	for _, a2 := range ad2.Args {
+		if !isStringInArray(a2, ad1.Args) {
+			return false
+		}
+	}
+	return true
 	// is go that cool? Really?
 	// According to:
 	// https://golang.org/ref/spec#Comparison_operators
@@ -151,4 +163,14 @@ func isSame(ad1, ad2 *pb.ApplicationDefinition) bool {
 		return false
 	}
 	return true
+}
+
+// return true if we find a string in array
+func isStringInArray(lookfor string, within []string) bool {
+	for _, a := range within {
+		if lookfor == a {
+			return true
+		}
+	}
+	return false
 }
