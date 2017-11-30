@@ -61,6 +61,7 @@ type Deployed struct {
 	lastLine     string
 	downloadUser string
 	downloadPW   string
+	deploymentID string
 }
 
 // callback from the compound initialisation
@@ -84,9 +85,15 @@ func main() {
 
 	// we are brutal - if we startup we slay all deployment users
 	users := getListOfUsers()
+	var wg sync.WaitGroup
 	for _, un := range users {
-		Slay(un.Username)
+		wg.Add(1)
+		go func(user string) {
+			defer wg.Done()
+			Slay(user)
+		}(un.Username)
 	}
+	wg.Wait()
 
 	sd := server.ServerDef{
 		Port: *port,
@@ -150,6 +157,7 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	du.started = time.Now()
 	du.repo = cr.Repository
 	du.build = cr.BuildID
+	du.deploymentID = cr.DeploymentID
 	_, wd := filepath.Split(du.user.HomeDir)
 	wd = fmt.Sprintf("/srv/autodeployer/deployments/%s", wd)
 	fmt.Printf("Deploying \"%s\" as user \"%s\" in %s\n", cr.Repository, du.user.Username, wd)
@@ -231,6 +239,24 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 		}
 	}
 	return nil, errors.New("Deploy() in server - this codepath should never have been reached!")
+}
+func (s *AutoDeployer) Undeploy(ctx context.Context, cr *pb.UndeployRequest) (*pb.UndeployResponse, error) {
+	if cr.ID == "" {
+		return nil, errors.New("Undeployrequest requires id")
+	}
+	dep := entryByMsg(cr.ID)
+	if dep == nil {
+		return nil, errors.New(fmt.Sprintf("No deployment with id %s", cr.ID))
+	}
+	if cr.Block {
+		fmt.Printf("Shutting down (sync): %s\n", dep.toString())
+		Slay(dep.user.Username)
+	} else {
+		fmt.Printf("Shutting down (async): %s\n", dep.toString())
+		go Slay(dep.user.Username)
+	}
+	res := pb.UndeployResponse{}
+	return &res, nil
 }
 
 func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupRequest) (*pb.StartupResponse, error) {
@@ -364,6 +390,27 @@ func isPortInUse(port int) bool {
 
 	}
 	return false
+}
+
+func (s *AutoDeployer) GetDeployments(ctx context.Context, cr *pb.InfoRequest) (*pb.InfoResponse, error) {
+	res := pb.InfoResponse{}
+	for _, d := range deployed {
+		if (d.status == pb.DeploymentStatus_TERMINATED) || (d.idle) {
+			continue
+		}
+		dr := pb.DeployRequest{}
+		dr.DownloadURL = d.url
+		dr.DownloadUser = d.downloadUser
+		dr.DownloadPassword = d.downloadPW
+		dr.Binary = d.binary
+		dr.Repository = d.repo
+		dr.BuildID = d.build
+		dr.DeploymentID = d.deploymentID
+		dr.Args = d.args
+		da := pb.DeployedApp{Deployment: &dr, ID: d.startupMsg}
+		res.Apps = append(res.Apps, &da)
+	}
+	return &res, nil
 }
 
 /**********************************

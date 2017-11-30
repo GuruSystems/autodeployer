@@ -75,7 +75,7 @@ func Compare(def1, def2 *pb.GroupDefinitionRequest) (*Diff, error) {
 			ad2.Instances = ad1.Instances
 		}
 		// end snowflakes
-		if isIdentical(ad1, ad2) {
+		if IsIdentical(ad1, ad2) {
 			continue
 		}
 
@@ -128,7 +128,7 @@ func doesExistInDef(ad *pb.ApplicationDefinition, ads []*pb.ApplicationDefinitio
 
 // check if these two application definitions are identical
 // (in terms of actual deployment)
-func isIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
+func IsIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
 	if (ad1.DownloadURL != ad2.DownloadURL) || (ad1.DownloadUser != ad2.DownloadUser) || (ad1.DownloadPassword != ad2.DownloadPassword) || (ad1.Binary != ad2.Binary) || (ad1.BuildID != ad2.BuildID) || (ad1.Instances != ad2.Instances) {
 		return false
 	}

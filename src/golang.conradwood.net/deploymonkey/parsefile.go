@@ -31,6 +31,14 @@ func ParseFile(fname string) (*FileDef, error) {
 			x.Namespace = gd.Namespace
 		}
 	}
+	for _, g := range gd.Groups {
+		for _, app := range g.Applications {
+			err = CheckAppComplete(app)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 	fmt.Printf("Found %d groups in file %s\n", len(gd.Groups), fname)
 	fmt.Printf("Namespace: %s\n", gd.Namespace)
 	for _, x := range gd.Groups {

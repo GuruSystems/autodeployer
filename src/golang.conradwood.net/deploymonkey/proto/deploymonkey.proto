@@ -20,6 +20,7 @@ message ApplicationDefinition {
  string Repository=6;
  uint64 BuildID=7;
  uint32 Instances=8;
+ string DeploymentID=9;
 }
 
 // a group consists of one or more applications

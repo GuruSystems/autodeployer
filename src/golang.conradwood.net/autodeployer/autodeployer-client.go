@@ -20,6 +20,7 @@ var (
 	paras        = flag.String("paras", "", "The parameters to pass to the binary")
 	buildid      = flag.Int("build", 1, "The BuildID of the binary to be deployed")
 	repo         = flag.String("repo", "", "The name of the repository where the source of the binary to be deployed lives.")
+	deployid     = flag.String("deploy_id", "", "an opaque token that is linked to this particular deployment (and returned in deploymentrequest")
 )
 
 func main() {
@@ -39,7 +40,8 @@ func main() {
 		BuildID:          uint64(*buildid),
 		DownloadUser:     *downloaduser,
 		DownloadPassword: *downloadpw,
-		Repository:       *repo}
+		Repository:       *repo,
+		DeploymentID:     *deployid}
 	if *paras != "" {
 		args := strings.Split(*paras, " ")
 		req.Args = args

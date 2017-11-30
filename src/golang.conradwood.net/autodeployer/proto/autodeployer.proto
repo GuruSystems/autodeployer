@@ -13,6 +13,8 @@ message DeployRequest {
  repeated string Args=5;
  string Repository=6;
  uint64 BuildID=7;
+ // an opaque id -> will be also returned in InfoResponse
+ string DeploymentID=8;
 }
 enum DeploymentStatus {
 // nothing happened yet
@@ -69,14 +71,32 @@ int32 Ports=2;
 message ResourceResponse {
 repeated int32 Ports=1;
 }
+message InfoRequest{}
+
+message DeployedApp {
+string ID=1;
+DeployRequest Deployment=2;
+}
+message InfoResponse {
+repeated DeployedApp Apps=1;
+}
+
+message UndeployRequest{
+string ID=1;
+bool Block=2;
+}
+message UndeployResponse{}
 
 service AutoDeployer {
 // deploy an application
 rpc Deploy(DeployRequest) returns (DeployResponse);
+rpc Undeploy(UndeployRequest) returns (UndeployResponse);
 
 // once we re-executed ourselves, we send this message to our selves
 rpc InternalStartup(StartupRequest) returns (StartupResponse);
 rpc AllocResources(ResourceRequest) returns (ResourceResponse);
 rpc Terminated(TerminationRequest) returns (EmptyResponse);
 rpc Started(StartedRequest) returns (EmptyResponse);
+// what's running??
+rpc GetDeployments(InfoRequest) returns (InfoResponse);
 }

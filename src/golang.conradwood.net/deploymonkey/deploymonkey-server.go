@@ -15,16 +15,21 @@ import (
 	"strconv"
 )
 
+const (
+	DEPLOY_PREFIX = "DM-APPDEF-"
+)
+
 // static variables for flag parser
 var (
-	port   = flag.Int("port", 4999, "The server port")
-	dbhost = flag.String("dbhost", "postgres", "hostname of the postgres database rdms")
-	dbdb   = flag.String("database", "deploymonkey", "database to use for authentication")
-	dbuser = flag.String("dbuser", "root", "username for the database to use for authentication")
-	dbpw   = flag.String("dbpw", "pw", "password for the database to use for authentication")
-	file   = flag.String("filename", "", "filename with a group definition (for testing)")
-	dbcon  *sql.DB
-	dbinfo string
+	port      = flag.Int("port", 4999, "The server port")
+	dbhost    = flag.String("dbhost", "postgres", "hostname of the postgres database rdms")
+	dbdb      = flag.String("database", "deploymonkey", "database to use for authentication")
+	dbuser    = flag.String("dbuser", "root", "username for the database to use for authentication")
+	dbpw      = flag.String("dbpw", "pw", "password for the database to use for authentication")
+	file      = flag.String("filename", "", "filename with a group definition (for testing)")
+	applyonly = flag.Bool("apply_only", false, "if true will apply current config and exit")
+	dbcon     *sql.DB
+	dbinfo    string
 )
 
 // callback from the compound initialisation
@@ -47,14 +52,23 @@ func main() {
 	sd := server.ServerDef{
 		Port: *port,
 	}
+	err := applyAllVersions()
+	if err != nil {
+		fmt.Printf("Failed to apply all versions: %s\n", err)
+	}
+	if *applyonly {
+		if err == nil {
+			os.Exit(0)
+		}
+		os.Exit(10)
+	}
 	sd.Register = st
-	err := server.ServerStartup(sd)
+	err = server.ServerStartup(sd)
 	if err != nil {
 		fmt.Printf("failed to start server: %s\n", err)
 	}
 	fmt.Printf("Done\n")
 	return
-
 }
 
 func importFile(filename string) {
@@ -86,6 +100,36 @@ func importFile(filename string) {
 	}
 	fmt.Printf("File parsed.\n")
 
+}
+
+/**********************************
+* catch-all fix up
+***********************************/
+// this gets all groups, all current versions
+// and makes the deployment match
+func applyAllVersions() error {
+	var dv int
+	err := initDB()
+	if err != nil {
+		return errors.New(fmt.Sprintf("Failed to initdb: %s", err))
+	}
+	rows, err := dbcon.Query("SELECT deployedversion from appgroup ")
+	if err != nil {
+		fmt.Printf("Failed to get deployedversions: %s\n", err)
+		return err
+	}
+	for rows.Next() {
+		err := rows.Scan(&dv)
+		if err != nil {
+			fmt.Printf("Failed to get deployedversion for a group: %s\n", err)
+			return err
+		}
+		err = applyVersion(dv)
+		if err != nil {
+			fmt.Printf("Failed to apply version %d: %s\n", dv, err)
+		}
+	}
+	return nil
 }
 
 /**********************************
@@ -171,7 +215,7 @@ func createGroupVersion(nameSpace string, groupName string, def []*pb.Applicatio
 	}
 	err = dbcon.QueryRow("INSERT into group_version (group_id) values ($1) RETURNING id", r.id).Scan(&id)
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("Failed to insert application: %s", err))
+		return "", errors.New(fmt.Sprintf("Failed to insert group_version: %s", err))
 	}
 	versionId := id
 	fmt.Printf("New Version: %d for Group #%d\n", versionId, r.id)
@@ -190,9 +234,20 @@ func createGroupVersion(nameSpace string, groupName string, def []*pb.Applicatio
 	return fmt.Sprintf("%d", versionId), nil
 }
 
+func CheckAppComplete(app *pb.ApplicationDefinition) error {
+	s := fmt.Sprintf("%s-%s", app.Repository, app.DeploymentID)
+	if app.DownloadURL == "" {
+		return errors.New(fmt.Sprintf("%s is invalid: Missing DownloadURL", s))
+	}
+	return nil
+}
 func saveApp(app *pb.ApplicationDefinition) (string, error) {
 	var id int
-	err := dbcon.QueryRow("INSERT into appdef (sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances) values ($1,$2,$3,$4,$5,$6,$7) RETURNING id",
+	err := CheckAppComplete(app)
+	if err != nil {
+		return "", err
+	}
+	err = dbcon.QueryRow("INSERT into appdef (sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances) values ($1,$2,$3,$4,$5,$6,$7) RETURNING id",
 		app.DownloadURL, app.DownloadUser, app.DownloadPassword,
 		app.Binary, app.Repository, app.BuildID, app.Instances).Scan(&id)
 	if err != nil {
@@ -235,6 +290,7 @@ func loadApp(row *sql.Rows) (*pb.ApplicationDefinition, error) {
 	if err != nil {
 		return nil, err
 	}
+	res.DeploymentID = fmt.Sprintf("%s%d", DEPLOY_PREFIX, id)
 	args, err := loadAppArgs(id)
 	if err != nil {
 		return nil, err
@@ -286,12 +342,23 @@ func updateDeployedVersionNumber(v int) error {
 	return nil
 }
 
+// given a version of a group checks the workers and fixes it up to match version
+func applyVersion(v int) error {
+	apps, err := loadAppGroupVersion(v)
+	if err != nil {
+		return errors.New(fmt.Sprintf("error loading apps for version %d: %s", v, err))
+	}
+	err = MakeItSo(apps)
+	if err != nil {
+		return errors.New(fmt.Sprintf("error applyings apps for version %d: %s", v, err))
+	}
+	return nil
+}
+
 /**********************************
 * implementing the server functions here:
 ***********************************/
-type DeployMonkey struct {
-	wtf int
-}
+type DeployMonkey struct{}
 
 func (s *DeployMonkey) DefineGroup(ctx context.Context, cr *pb.GroupDefinitionRequest) (*pb.GroupDefResponse, error) {
 	if cr.Namespace == "" {
@@ -324,19 +391,26 @@ func (s *DeployMonkey) DefineGroup(ctx context.Context, cr *pb.GroupDefinitionRe
 		return &r, nil
 	}
 
+	// in diff we now have a list of appdiffs (stuff we need to change)
 	for _, dg := range diff.AppDiffs {
 		fmt.Printf("Update: %s\n", dg.Describe())
 	}
+
+	// create a new version with our new app definitions
 	vid, err := createGroupVersion(cr.Namespace, cr.GroupID, cr.Applications)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Failed to create new version: %s", err))
 	}
-	// we do have diffs, so create a new version and put the new definition in to the database
+
+	// tell client we have saved the changes (return an ID to refer to this version)
+	// (to call DeployVersion() later)
 	r := pb.GroupDefResponse{Result: pb.GroupResponseStatus_CHANGEACCEPTED,
 		VersionID: vid,
 	}
 	return &r, nil
 }
+
+// given a Version# -> Take it online ("Make it so")
 func (s *DeployMonkey) DeployVersion(ctx context.Context, cr *pb.DeployRequest) (*pb.DeployResponse, error) {
 	if cr.VersionID == "" {
 		return nil, errors.New("VersionID required for deployment")
@@ -345,6 +419,7 @@ func (s *DeployMonkey) DeployVersion(ctx context.Context, cr *pb.DeployRequest) 
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Invalid VersionID: \"%s\": %s", cr.VersionID, err))
 	}
+	applyVersion(version)
 	updateDeployedVersionNumber(version)
 	r := pb.DeployResponse{}
 	return &r, nil
