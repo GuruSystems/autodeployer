@@ -430,7 +430,7 @@ func (s *DeployMonkey) DeployVersion(ctx context.Context, cr *pb.DeployRequest) 
 	return &r, nil
 }
 
-func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (*pb.EmptyResponse, error) {
+func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (*pb.GroupDefResponse, error) {
 	initDB()
 	if cr.Namespace == "" {
 		return nil, errors.New("Namespace required")
@@ -464,7 +464,12 @@ func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (
 	for _, app := range apps {
 		if isSame(app, cr.App) {
 			fmt.Printf("Updating app: %s\n", app.Repository)
-			mergeApp(app, cr.App)
+			m := mergeApp(app, cr.App)
+			if !m {
+				fmt.Printf("Nothing to update, app is already up to date\n")
+				r := pb.GroupDefResponse{Result: pb.GroupResponseStatus_NOCHANGE}
+				return &r, nil
+			}
 			foundone = true
 			break
 		}
@@ -482,31 +487,48 @@ func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (
 		return nil, errors.New(fmt.Sprintf("failed to create a new group version: %s", err))
 	}
 	fmt.Printf("Created group version: %s\n", sv)
+	version, err := strconv.Atoi(sv)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("version group not a number (%s)? BUG!: %s", sv, err))
+	}
+	applyVersion(version)
+	updateDeployedVersionNumber(version)
+
 	return nil, errors.New("Deploy() in server - this codepath should never have been reached!")
 }
 
 // merge source into target
 // basically anything set in source shall be copied to target
-func mergeApp(t, s *pb.ApplicationDefinition) {
-	if s.DownloadURL != "" {
+// returns true if there was something updated
+func mergeApp(t, s *pb.ApplicationDefinition) bool {
+	res := false
+	if (s.DownloadURL != "") && (s.DownloadURL != t.DownloadURL) {
+		res = true
 		t.DownloadURL = s.DownloadURL
 	}
-	if s.DownloadUser != "" {
+	if (s.DownloadUser != "") && (s.DownloadUser != t.DownloadUser) {
+		res = true
 		t.DownloadUser = s.DownloadUser
 	}
-	if s.DownloadPassword != "" {
+	if (s.DownloadPassword != "") && (s.DownloadPassword != t.DownloadPassword) {
+		res = true
 		t.DownloadPassword = s.DownloadPassword
 	}
-	if len(s.Args) != 0 {
+	if (len(s.Args) != 0) && (!AreArgsIdentical(s, t)) {
+		res = true
 		t.Args = s.Args
 	}
-	if s.Binary != "" {
+	if (s.Binary != "") && (s.Binary != t.Binary) {
+		res = true
 		t.Binary = s.Binary
 	}
-	if s.BuildID != 0 {
+	if (s.BuildID != 0) && (s.BuildID != t.BuildID) {
+		res = true
 		t.BuildID = s.BuildID
 	}
-	if s.Instances != 0 {
+	if (s.Instances != 0) && (s.Instances != t.Instances) {
+		res = true
 		t.Instances = s.Instances
 	}
+	return res
 }

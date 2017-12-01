@@ -71,5 +71,5 @@ message DeployResponse {
 service DeployMonkey {
 rpc DefineGroup(GroupDefinitionRequest) returns (GroupDefResponse);
 rpc DeployVersion(DeployRequest) returns (DeployResponse);
-rpc UpdateApp(UpdateAppRequest) returns (EmptyResponse);
+rpc UpdateApp(UpdateAppRequest) returns (GroupDefResponse);
 }

@@ -61,7 +61,7 @@ func updateApp() {
 		fmt.Printf("Failed to update app: %s\n", err)
 		return
 	}
-	fmt.Printf("Response to updateapp: %v\n", resp)
+	fmt.Printf("Response to updateapp: %v\n", resp.Result)
 }
 
 func processFile() {

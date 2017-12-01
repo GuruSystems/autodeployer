@@ -131,12 +131,8 @@ func doesExistInDef(ad *pb.ApplicationDefinition, ads []*pb.ApplicationDefinitio
 	return false
 }
 
-// check if these two application definitions are identical
-// (in terms of actual deployment)
-func IsIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
-	if (ad1.DownloadURL != ad2.DownloadURL) || (ad1.DownloadUser != ad2.DownloadUser) || (ad1.DownloadPassword != ad2.DownloadPassword) || (ad1.Binary != ad2.Binary) || (ad1.BuildID != ad2.BuildID) || (ad1.Instances != ad2.Instances) {
-		return false
-	}
+// returns true if both arg arrays are identical
+func AreArgsIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
 	// check args
 	for _, a1 := range ad1.Args {
 		if !isStringInArray(a1, ad2.Args) {
@@ -148,6 +144,19 @@ func IsIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
 			return false
 		}
 	}
+	return true
+}
+
+// check if these two application definitions are identical
+// (in terms of actual deployment)
+func IsIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
+	if (ad1.DownloadURL != ad2.DownloadURL) || (ad1.DownloadUser != ad2.DownloadUser) || (ad1.DownloadPassword != ad2.DownloadPassword) || (ad1.Binary != ad2.Binary) || (ad1.BuildID != ad2.BuildID) || (ad1.Instances != ad2.Instances) {
+		return false
+	}
+	if !AreArgsIdentical(ad1, ad2) {
+		return false
+	}
+
 	return true
 	// is go that cool? Really?
 	// According to:
