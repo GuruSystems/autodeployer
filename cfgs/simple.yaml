@@ -1,0 +1,12 @@
+namespace: kpitracker
+groups:
+  - groupid: testing
+    applications:
+      - repository: norepo
+        binary: executable
+        downloadurl: http://localhost/application
+        instances: 2
+        buildid: 0
+        args:
+          - arg1
+          - arg2
