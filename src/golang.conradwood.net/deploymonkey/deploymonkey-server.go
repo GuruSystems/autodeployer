@@ -174,17 +174,22 @@ func getGroupFromDatabase(nameSpace string, groupName string) (*DBGroup, error) 
 	res := pb.GroupDefinitionRequest{}
 	d := DBGroup{}
 	res.Namespace = nameSpace
-	rows, err := dbcon.Query("SELECT id,groupname,deployedversion from appgroup where groupname=$1", groupName)
+	rows, err := dbcon.Query("SELECT id,groupname,deployedversion from appgroup where groupname=$1 and namespace=$2", groupName, nameSpace)
 	if err != nil {
 		fmt.Printf("Failed to get groupname %s\n", groupName)
 		return nil, err
 	}
+	gotone := false
 	for rows.Next() {
+		gotone = true
 		err := rows.Scan(&d.id, &res.GroupID, &d.DeployedVersion)
 		if err != nil {
 			fmt.Printf("Failed to get row for groupname %s\n", groupName)
 			return nil, err
 		}
+	}
+	if !gotone {
+		return nil, nil
 	}
 	d.groupDef = &res
 	return &d, nil
@@ -234,13 +239,6 @@ func createGroupVersion(nameSpace string, groupName string, def []*pb.Applicatio
 	return fmt.Sprintf("%d", versionId), nil
 }
 
-func CheckAppComplete(app *pb.ApplicationDefinition) error {
-	s := fmt.Sprintf("%s-%s", app.Repository, app.DeploymentID)
-	if app.DownloadURL == "" {
-		return errors.New(fmt.Sprintf("%s is invalid: Missing DownloadURL", s))
-	}
-	return nil
-}
 func saveApp(app *pb.ApplicationDefinition) (string, error) {
 	var id int
 	err := CheckAppComplete(app)
@@ -276,6 +274,7 @@ func loadAppGroupVersion(version int) ([]*pb.ApplicationDefinition, error) {
 			fmt.Printf("Failed to get app for version %d:%s\n", version, err)
 			return nil, err
 		}
+		r.DeploymentID = fmt.Sprintf("%s%d", DEPLOY_PREFIX, version)
 		res = append(res, r)
 	}
 	return res, nil
@@ -290,7 +289,6 @@ func loadApp(row *sql.Rows) (*pb.ApplicationDefinition, error) {
 	if err != nil {
 		return nil, err
 	}
-	res.DeploymentID = fmt.Sprintf("%s%d", DEPLOY_PREFIX, id)
 	args, err := loadAppArgs(id)
 	if err != nil {
 		return nil, err
@@ -348,7 +346,8 @@ func applyVersion(v int) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("error loading apps for version %d: %s", v, err))
 	}
-	err = MakeItSo(apps)
+	deplid := fmt.Sprintf("%s%d", DEPLOY_PREFIX, v)
+	err = MakeItSo(deplid, apps)
 	if err != nil {
 		return errors.New(fmt.Sprintf("error applyings apps for version %d: %s", v, err))
 	}
@@ -374,6 +373,12 @@ func (s *DeployMonkey) DefineGroup(ctx context.Context, cr *pb.GroupDefinitionRe
 	cur, err := getGroupFromDatabase(cr.Namespace, cr.GroupID)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Failed to get group from db: %s", err))
+	}
+	if cur == nil {
+		cur, err = createGroup(cr.Namespace, cr.GroupID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	apps, err := loadAppGroupVersion(cur.DeployedVersion)
 	if err != nil {
@@ -427,5 +432,81 @@ func (s *DeployMonkey) DeployVersion(ctx context.Context, cr *pb.DeployRequest) 
 
 func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (*pb.EmptyResponse, error) {
 	initDB()
+	if cr.Namespace == "" {
+		return nil, errors.New("Namespace required")
+	}
+	if cr.GroupID == "" {
+		return nil, errors.New("GroupID required")
+	}
+	if cr.App.Repository == "" {
+		return nil, errors.New("App Repository required")
+	}
+	err := initDB()
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Failed to initdb: %s", err))
+	}
+	cur, err := getGroupFromDatabase(cr.Namespace, cr.GroupID)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Failed to get group from db: %s", err))
+	}
+	if cur == nil {
+		return nil, errors.New(fmt.Sprintf("No such group: (%s,%s)", cr.Namespace, cr.GroupID))
+	}
+	apps, err := loadAppGroupVersion(cur.DeployedVersion)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Failed to get apps for version %d from db: %s", cur.DeployedVersion, err))
+	}
+	fmt.Printf("Loaded Group from database: \n")
+	cur.groupDef.Applications = apps
+	PrintGroup(cur.groupDef)
+	// now find the app we want to update:
+	foundone := false
+	for _, app := range apps {
+		if isSame(app, cr.App) {
+			fmt.Printf("Updating app: %s\n", app.Repository)
+			mergeApp(app, cr.App)
+			foundone = true
+			break
+		}
+	}
+	if !foundone {
+		return nil, errors.New(fmt.Sprintf("There is no app \"%s\" in group (%s,%s)", cr.App.Repository, cr.Namespace, cr.GroupID))
+	}
+	cur.groupDef.Applications = apps
+	fmt.Printf("Updated Group: \n")
+	cur.groupDef.Applications = apps
+	PrintGroup(cur.groupDef)
+
+	sv, err := createGroupVersion(cr.Namespace, cr.GroupID, apps)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("failed to create a new group version: %s", err))
+	}
+	fmt.Printf("Created group version: %s\n", sv)
 	return nil, errors.New("Deploy() in server - this codepath should never have been reached!")
+}
+
+// merge source into target
+// basically anything set in source shall be copied to target
+func mergeApp(t, s *pb.ApplicationDefinition) {
+	if s.DownloadURL != "" {
+		t.DownloadURL = s.DownloadURL
+	}
+	if s.DownloadUser != "" {
+		t.DownloadUser = s.DownloadUser
+	}
+	if s.DownloadPassword != "" {
+		t.DownloadPassword = s.DownloadPassword
+	}
+	if len(s.Args) != 0 {
+		t.Args = s.Args
+	}
+	if s.Binary != "" {
+		t.Binary = s.Binary
+	}
+	if s.BuildID != 0 {
+		t.BuildID = s.BuildID
+	}
+	if s.Instances != 0 {
+		t.Instances = s.Instances
+	}
 }

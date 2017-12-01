@@ -13,6 +13,7 @@ import (
 	ad "golang.conradwood.net/autodeployer/proto"
 	"golang.conradwood.net/client"
 	"golang.org/x/net/context"
+	"strings"
 
 	pb "golang.conradwood.net/deploymonkey/proto"
 	"google.golang.org/grpc"
@@ -24,13 +25,13 @@ var (
 	ctx context.Context
 )
 
-func MakeItSo(ads []*pb.ApplicationDefinition) error {
+func MakeItSo(groupid string, ads []*pb.ApplicationDefinition) error {
 	sas, err := getDeployers()
 	if err != nil {
 		return err
 	}
 	ctx = client.SetAuthToken()
-	deplid := ads[0].DeploymentID
+	deplid := groupid
 	fmt.Printf("Looking for services with deplid: %s\n", deplid)
 	// this is way... to dumb. we do two steps:
 	// 1. shutdown all applications for this group
@@ -72,6 +73,7 @@ func MakeItSo(ads []*pb.ApplicationDefinition) error {
 			retries--
 			if retries == 0 {
 				fmt.Printf("Wanted to deploy %d instances of %v, but only deployed %d\n", app.Instances, app, instances)
+				break
 			}
 			for _, sa := range sas {
 				err = deployOn(sa, app)
@@ -79,11 +81,19 @@ func MakeItSo(ads []*pb.ApplicationDefinition) error {
 					instances++
 					break
 				}
-				fmt.Printf("failed to deploy an instance: %s\n", err)
+				fmt.Printf("failed to deploy an instance: %s (retries=%d)\n", err, retries)
 			}
 		}
 	}
-	return errors.New("Failed to make it so")
+	return nil
+}
+
+func replaceVars(text string, vars map[string]string) string {
+	s := text
+	for k, v := range vars {
+		s = strings.Replace(s, fmt.Sprintf("${%s}", k), v, -1)
+	}
+	return s
 }
 
 func deployOn(sa *rpb.ServiceAddress, app *pb.ApplicationDefinition) error {
@@ -94,9 +104,14 @@ func deployOn(sa *rpb.ServiceAddress, app *pb.ApplicationDefinition) error {
 		return err
 	}
 	defer conn.Close()
+
+	vars := make(map[string]string)
+	vars["BUILDID"] = fmt.Sprintf("%d", app.BuildID)
+	vars["REPOSITORY"] = app.Repository
+
 	adc := ad.NewAutoDeployerClient(conn)
 	dr := ad.DeployRequest{
-		DownloadURL:      app.DownloadURL,
+		DownloadURL:      replaceVars(app.DownloadURL, vars),
 		DownloadUser:     app.DownloadUser,
 		DownloadPassword: app.DownloadPassword,
 		Binary:           app.Binary,

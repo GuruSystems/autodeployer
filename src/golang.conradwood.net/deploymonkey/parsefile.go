@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	pb "golang.conradwood.net/deploymonkey/proto"
 	"gopkg.in/yaml.v2"
@@ -45,4 +46,11 @@ func ParseFile(fname string) (*FileDef, error) {
 		PrintGroup(x)
 	}
 	return &gd, nil
+}
+func CheckAppComplete(app *pb.ApplicationDefinition) error {
+	s := fmt.Sprintf("%s-%s", app.Repository, app.DeploymentID)
+	if app.DownloadURL == "" {
+		return errors.New(fmt.Sprintf("%s is invalid: Missing DownloadURL", s))
+	}
+	return nil
 }

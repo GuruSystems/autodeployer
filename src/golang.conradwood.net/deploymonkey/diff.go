@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	pb "golang.conradwood.net/deploymonkey/proto"
 )
@@ -51,6 +52,10 @@ func (ad *AppDiff) Describe() string {
 // compare groupdefinition request and work out the differences
 func Compare(def1, def2 *pb.GroupDefinitionRequest) (*Diff, error) {
 	diff := &Diff{}
+
+	if def1.Namespace != def2.Namespace {
+		return nil, errors.New(fmt.Sprintf("Comparing two different namespaces makes no sense (%s and %s). Bug?", def1.Namespace, def2.Namespace))
+	}
 	// 1. find all applications that exist in def1 but not def2
 	findNonExists(def1, def2, false, diff)
 	// 2. find all applications that exist in def2 but not def1

@@ -8,7 +8,7 @@ PROTOCINC += -I${GOPATH}/src/golang.conradwood.net/vendor/github.com/grpc-ecosys
 server:
 	go install deploymonkey-server.go parsefile.go diff.go printer.go livestate.go
 client:
-	go install deploymonkey-client.go
+	go install deploymonkey-client.go parsefile.go printer.go
 
 .PHONY: proto
 proto:

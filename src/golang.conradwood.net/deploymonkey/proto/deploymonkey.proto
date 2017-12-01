@@ -41,8 +41,8 @@ message GroupDefinitionRequest {
 
 message UpdateAppRequest {
 string GroupID=1;
-string Repository=2;
-uint64 BuildID=8;
+string Namespace=2;
+ApplicationDefinition app=3;
 }
 
 

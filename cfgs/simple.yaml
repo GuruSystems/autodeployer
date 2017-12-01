@@ -1,4 +1,4 @@
-namespace: kpitracker
+namespace: cnw
 groups:
   - groupid: testing
     applications:

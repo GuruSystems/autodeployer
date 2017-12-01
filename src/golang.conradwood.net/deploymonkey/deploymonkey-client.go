@@ -8,21 +8,69 @@ import (
 	"golang.conradwood.net/client"
 	pb "golang.conradwood.net/deploymonkey/proto"
 	"google.golang.org/grpc"
+	"os"
 )
 
 // static variables for flag parser
 var (
-	downloaduser = flag.String("user", "", "the username to authenticate with at the downloadurl")
-	downloadpw   = flag.String("password", "", "the password to authenticate with at the downloadurl")
-	downloadurl  = flag.String("url", "", "The `URL` of the binary to deploy")
-	binary       = flag.String("binary", "", "The relative path to the binary to deploy")
-	paras        = flag.String("paras", "", "The parameters to pass to the binary")
-	buildid      = flag.Int("build", 1, "The BuildID of the binary to be deployed")
-	repo         = flag.String("repo", "", "The name of the repository where the source of the binary to be deployed lives.")
+	filename   = flag.String("configfile", "", "the yaml config file to submit to server")
+	namespace  = flag.String("namespace", "", "namespace of the group to update")
+	groupname  = flag.String("groupname", "", "groupname of the group to update")
+	repository = flag.String("repo", "", "repository of the app in the group to update")
+	buildid    = flag.Int("buildid", 0, "the new buildid of the app in the group to update")
 )
 
 func main() {
 	flag.Parse()
+
+	done := false
+	if *filename != "" {
+		processFile()
+		done = true
+	}
+	if *namespace != "" {
+		updateApp()
+	}
+	if !done {
+		fmt.Printf("Nothing to do.\n")
+	}
+	os.Exit(1)
+}
+
+func updateApp() {
+	ad := pb.ApplicationDefinition{
+		Repository: *repository,
+		BuildID:    uint64(*buildid),
+	}
+	uar := pb.UpdateAppRequest{
+		GroupID:   *groupname,
+		Namespace: *namespace,
+		App:       &ad,
+	}
+	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
+	if err != nil {
+		fmt.Println("failed to dial: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := client.SetAuthToken()
+
+	cl := pb.NewDeployMonkeyClient(conn)
+	resp, err := cl.UpdateApp(ctx, &uar)
+	if err != nil {
+		fmt.Printf("Failed to update app: %s\n", err)
+		return
+	}
+	fmt.Printf("Response to updateapp: %v\n", resp)
+}
+
+func processFile() {
+	fd, err := ParseFile(*filename)
+	if err != nil {
+		fmt.Printf("Failed to parse file %s: %s\n", *filename, err)
+		os.Exit(10)
+	}
+
 	grpc.EnableTracing = true
 	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
 	if err != nil {
@@ -33,13 +81,22 @@ func main() {
 	ctx := client.SetAuthToken()
 
 	cl := pb.NewDeployMonkeyClient(conn)
-	req := pb.GroupDefinitionRequest{
-		GroupID: "HelloWorldGroup",
+	for _, req := range fd.Groups {
+		resp, err := cl.DefineGroup(ctx, req)
+		if err != nil {
+			fmt.Printf("Failed to define group: %s\n", err)
+			return
+		}
+		if resp.Result != pb.GroupResponseStatus_CHANGEACCEPTED {
+			fmt.Printf("Response to deploy: %s - skipping\n", resp.Result)
+			continue
+		}
+		dr := pb.DeployRequest{VersionID: resp.VersionID}
+		dresp, err := cl.DeployVersion(ctx, &dr)
+		if err != nil {
+			fmt.Printf("Failed to deploy version %d: %s\n", resp.VersionID, err)
+			return
+		}
+		fmt.Printf("Deploy response: %v\n", dresp)
 	}
-	resp, err := cl.DefineGroup(ctx, &req)
-	if err != nil {
-		fmt.Printf("Failed to define group: %s\n", err)
-		return
-	}
-	fmt.Printf("Response to deploy: %v\n", resp)
 }
