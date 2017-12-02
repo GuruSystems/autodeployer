@@ -7,7 +7,8 @@ CREATE SEQUENCE lnk_app_grp_serial
 CREATE SEQUENCE grp_version_serial
 
 # a group of apps (versioned)
-CREATE TABLE appgroup ( id integer PRIMARY KEY DEFAULT nextval('dbname_serial'), namespace varchar(100) not null, groupname varchar(100), deployedversion integer not null default 0, unique(namespace,groupname)  )
+# there's a lack of foreign keys here for the versions because go database interface sucks
+CREATE TABLE appgroup ( id integer PRIMARY KEY DEFAULT nextval('dbname_serial'), namespace varchar(100) not null, groupname varchar(100), deployedversion integer not null default 0, pendingversion integer not null default 0,unique(namespace,groupname)  )
 
 CREATE TABLE appdef ( id integer PRIMARY KEY DEFAULT nextval('appdef_serial'), sourceurl varchar(255) NOT NULL, downloaduser varchar(255), downloadpw varchar(255),executable varchar(255) NOT NULL, repo varchar(255) NOT NULL, buildid integer not null, instances integer not null)
 

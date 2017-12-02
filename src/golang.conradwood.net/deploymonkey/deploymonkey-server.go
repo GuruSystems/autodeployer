@@ -342,6 +342,16 @@ func updateDeployedVersionNumber(v int) error {
 
 // given a version of a group checks the workers and fixes it up to match version
 func applyVersion(v int) error {
+	// first step: mark the version as pending
+	// so if it fails for some reason, we know what to replay
+	gid, err := getGroupIDFromVersion(v)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Invalid Group-Version: \"%d\": %s", v, err))
+	}
+	_, err = dbcon.Exec("update appgroup set pendingversion = $1 where id = $2", v, gid)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Unable to update group: %s", err))
+	}
 	apps, err := loadAppGroupVersion(v)
 	if err != nil {
 		return errors.New(fmt.Sprintf("error loading apps for version %d: %s", v, err))
