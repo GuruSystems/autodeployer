@@ -542,3 +542,59 @@ func mergeApp(t, s *pb.ApplicationDefinition) bool {
 	}
 	return res
 }
+
+func (s *DeployMonkey) GetNameSpaces(ctx context.Context, cr *pb.GetNameSpaceRequest) (*pb.GetNameSpaceResponse, error) {
+	resp := pb.GetNameSpaceResponse{}
+	n, err := getStringsFromDB("select distinct namespace from appgroup", "")
+	if err != nil {
+		return nil, err
+	}
+	resp.NameSpaces = n
+	return &resp, nil
+}
+
+func (s *DeployMonkey) GetGroups(ctx context.Context, cr *pb.GetGroupsRequest) (*pb.GetGroupsResponse, error) {
+	if cr.NameSpace == "" {
+		return nil, errors.New("Namespace required")
+	}
+	resp := pb.GetGroupsResponse{}
+	n, err := getStringsFromDB("select groupname from appgroup where namespace = $1", cr.NameSpace)
+	if err != nil {
+		return nil, err
+	}
+	resp.GroupNames = n
+	return &resp, nil
+}
+
+func getStringsFromDB(sqls string, val string) ([]string, error) {
+	err := initDB()
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Failed to initdb: %s", err))
+	}
+	var rows *sql.Rows
+	if val != "" {
+		rows, err = dbcon.Query(sqls, val)
+	} else {
+		rows, err = dbcon.Query(sqls)
+	}
+	if err != nil {
+		fmt.Printf("Failed to query \"%s\": %s\n", sqls, err)
+		return nil, err
+	}
+	var res []string
+	var dv string
+	for rows.Next() {
+		err := rows.Scan(&dv)
+		if err != nil {
+			fmt.Printf("Failed to get deployedversion for a group: %s\n", err)
+			return nil, err
+		}
+		res = append(res, dv)
+	}
+	return res, nil
+}
+
+func (s *DeployMonkey) GetApplications(ctx context.Context, cr *pb.GetAppsRequest) (*pb.GetAppsResponse, error) {
+	resp := pb.GetAppsResponse{}
+	return &resp, nil
+}

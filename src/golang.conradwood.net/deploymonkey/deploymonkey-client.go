@@ -32,9 +32,41 @@ func main() {
 		updateApp()
 	}
 	if !done {
+		listConfig()
 		fmt.Printf("Nothing to do.\n")
 	}
 	os.Exit(1)
+}
+func bail(err error, msg string) {
+	if err == nil {
+		return
+	}
+	fmt.Printf("%s: %s\n", msg, err)
+	os.Exit(10)
+}
+
+func listConfig() {
+	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
+	if err != nil {
+		fmt.Println("failed to dial: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := client.SetAuthToken()
+
+	cl := pb.NewDeployMonkeyClient(conn)
+
+	ns, err := cl.GetNameSpaces(ctx, &pb.GetNameSpaceRequest{})
+	bail(err, "Error getting namespaces")
+	fmt.Printf("Namespaces:\n")
+	for _, n := range ns.NameSpaces {
+		gns, err := cl.GetGroups(ctx, &pb.GetGroupsRequest{NameSpace: n})
+		bail(err, "Error getting group")
+		fmt.Printf("  %s (%d groups)\n", n, len(gns.GroupNames))
+		for _, gs := range gns.GroupNames {
+			fmt.Printf("      %s\n", gs)
+		}
+	}
 }
 
 func updateApp() {

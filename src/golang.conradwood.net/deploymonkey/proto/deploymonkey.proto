@@ -68,8 +68,29 @@ string VersionID=1;
 
 message DeployResponse {
 }
+
+message GetNameSpaceRequest {}
+message GetNameSpaceResponse {
+repeated string NameSpaces = 1;
+}
+message GetGroupsRequest {
+string NameSpace=1;
+}
+message GetGroupsResponse {
+repeated string GroupNames=1;
+}
+message GetAppsRequest {
+string NameSpace=1;
+string GroupName=2; 
+}
+message GetAppsResponse {
+repeated ApplicationDefinition Applications=4;
+}
 service DeployMonkey {
 rpc DefineGroup(GroupDefinitionRequest) returns (GroupDefResponse);
 rpc DeployVersion(DeployRequest) returns (DeployResponse);
 rpc UpdateApp(UpdateAppRequest) returns (GroupDefResponse);
+rpc GetNameSpaces(GetNameSpaceRequest) returns (GetNameSpaceResponse);
+rpc GetGroups(GetGroupsRequest) returns (GetGroupsResponse);
+rpc GetApplications(GetAppsRequest) returns (GetAppsResponse);
 }
