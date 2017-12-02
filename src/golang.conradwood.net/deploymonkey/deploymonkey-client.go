@@ -64,7 +64,15 @@ func listConfig() {
 		bail(err, "Error getting group")
 		fmt.Printf("  %s (%d groups)\n", n, len(gns.GroupNames))
 		for _, gs := range gns.GroupNames {
-			fmt.Printf("      %s\n", gs)
+			gar := pb.GetAppsRequest{
+				NameSpace: n,
+				GroupName: gs}
+			gapps, err := cl.GetApplications(ctx, &gar)
+			bail(err, "Failed to get applications")
+			fmt.Printf("      %s (%d applications)\n", gs, len(gapps.Applications))
+			for _, app := range gapps.Applications {
+				fmt.Printf("           Repo=%s, BuildID=#%d\n", app.Repository, app.BuildID)
+			}
 		}
 	}
 }

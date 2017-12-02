@@ -13,6 +13,8 @@ import (
 	"google.golang.org/grpc"
 	"os"
 	"strconv"
+	"sync"
+	"time"
 )
 
 const (
@@ -21,15 +23,17 @@ const (
 
 // static variables for flag parser
 var (
-	port      = flag.Int("port", 4999, "The server port")
-	dbhost    = flag.String("dbhost", "postgres", "hostname of the postgres database rdms")
-	dbdb      = flag.String("database", "deploymonkey", "database to use for authentication")
-	dbuser    = flag.String("dbuser", "root", "username for the database to use for authentication")
-	dbpw      = flag.String("dbpw", "pw", "password for the database to use for authentication")
-	file      = flag.String("filename", "", "filename with a group definition (for testing)")
-	applyonly = flag.Bool("apply_only", false, "if true will apply current config and exit")
-	dbcon     *sql.DB
-	dbinfo    string
+	port          = flag.Int("port", 4999, "The server port")
+	dbhost        = flag.String("dbhost", "postgres", "hostname of the postgres database rdms")
+	dbdb          = flag.String("database", "deploymonkey", "database to use for authentication")
+	dbuser        = flag.String("dbuser", "root", "username for the database to use for authentication")
+	dbpw          = flag.String("dbpw", "pw", "password for the database to use for authentication")
+	file          = flag.String("filename", "", "filename with a group definition (for testing)")
+	applyonly     = flag.Bool("apply_only", false, "if true will apply current config and exit")
+	applyinterval = flag.Int("apply_interval", 60, "`seconds` between scans for discrepancies and re-applying them")
+	dbcon         *sql.DB
+	dbinfo        string
+	applyLock     sync.Mutex
 )
 
 // callback from the compound initialisation
@@ -52,7 +56,7 @@ func main() {
 	sd := server.ServerDef{
 		Port: *port,
 	}
-	err := applyAllVersions()
+	err := applyAllVersions(false)
 	if err != nil {
 		fmt.Printf("Failed to apply all versions: %s\n", err)
 	}
@@ -62,6 +66,11 @@ func main() {
 		}
 		os.Exit(10)
 	}
+	applyTimer := time.NewTimer(time.Second * time.Duration(*applyinterval))
+	go func() {
+		<-applyTimer.C
+		applyAllVersions(true)
+	}()
 	sd.Register = st
 	err = server.ServerStartup(sd)
 	if err != nil {
@@ -107,13 +116,25 @@ func importFile(filename string) {
 ***********************************/
 // this gets all groups, all current versions
 // and makes the deployment match
-func applyAllVersions() error {
+// if pendingonly is true, will check for mismatched current != pending versions
+// and only apply those
+func applyAllVersions(pendingonly bool) error {
 	var dv int
+	if pendingonly {
+		fmt.Printf("(Re)applying all pending versions...\n")
+	} else {
+		fmt.Printf("Reapplying all current versions...\n")
+	}
 	err := initDB()
 	if err != nil {
 		return errors.New(fmt.Sprintf("Failed to initdb: %s", err))
 	}
-	rows, err := dbcon.Query("SELECT deployedversion from appgroup ")
+	var rows *sql.Rows
+	if pendingonly {
+		rows, err = dbcon.Query("SELECT pendingversion from appgroup where deployedversion != pendingversion")
+	} else {
+		rows, err = dbcon.Query("SELECT deployedversion from appgroup ")
+	}
 	if err != nil {
 		fmt.Printf("Failed to get deployedversions: %s\n", err)
 		return err
@@ -342,6 +363,8 @@ func updateDeployedVersionNumber(v int) error {
 
 // given a version of a group checks the workers and fixes it up to match version
 func applyVersion(v int) error {
+	applyLock.Lock()
+	defer applyLock.Unlock()
 	// first step: mark the version as pending
 	// so if it fails for some reason, we know what to replay
 	gid, err := getGroupIDFromVersion(v)
@@ -595,6 +618,20 @@ func getStringsFromDB(sqls string, val string) ([]string, error) {
 }
 
 func (s *DeployMonkey) GetApplications(ctx context.Context, cr *pb.GetAppsRequest) (*pb.GetAppsResponse, error) {
+	dbg, err := getGroupFromDatabase(cr.NameSpace, cr.GroupName)
+	if err != nil {
+		s := fmt.Sprintf("No such group: (%s,%s)\n", cr.NameSpace, cr.GroupName)
+		fmt.Println(s)
+		return nil, errors.New(s)
+	}
+	fmt.Printf("Deployed Version: %d\n", dbg.DeployedVersion)
+	ad, err := loadAppGroupVersion(dbg.DeployedVersion)
+	if err != nil {
+		s := fmt.Sprintf("No applications for version %d: (%s,%s)\n", dbg.DeployedVersion, cr.NameSpace, cr.GroupName)
+		fmt.Println(s)
+		return nil, errors.New(s)
+	}
 	resp := pb.GetAppsResponse{}
+	resp.Applications = ad
 	return &resp, nil
 }
