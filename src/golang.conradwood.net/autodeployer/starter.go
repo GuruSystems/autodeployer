@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -21,6 +22,9 @@ import (
 // (exits if childprocess exits)
 // this is the 2nd part of the server (execed by main, this part is running unprivileged)
 func Execute() {
+	// redirect stderr to stdout (to capture panics)
+	syscall.Dup2(int(os.Stdout.Fd()), int(os.Stderr.Fd()))
+
 	// we're speaking to the local server only ever
 	serverAddr := fmt.Sprintf("localhost:%d", *port)
 	creds := client.GetClientCreds()
@@ -173,9 +177,11 @@ func downloadFromURL(url string, target string, user string, pw string) error {
 		return err
 	}
 	defer response.Body.Close()
-	fmt.Printf("Http.Get() response code: %d\n", response.StatusCode)
+	fmt.Printf("Http.Get() response code: %d (code is not necessarily an error)\n", response.StatusCode)
 	if isHttpError(response.StatusCode) {
-		return errors.New(fmt.Sprintf("http error: %d (%s)", response.StatusCode, response.Status))
+		s := fmt.Sprintf("http error: %d (%s)", response.StatusCode, response.Status)
+		fmt.Println(s)
+		return errors.New(s)
 	}
 	n, err := io.Copy(output, response.Body)
 	if err != nil {

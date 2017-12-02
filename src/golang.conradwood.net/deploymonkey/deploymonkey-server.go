@@ -187,6 +187,7 @@ func initDB() error {
 type DBGroup struct {
 	id              int
 	DeployedVersion int
+	PendingVersion  int
 	groupDef        *pb.GroupDefinitionRequest
 }
 
@@ -195,7 +196,7 @@ func getGroupFromDatabase(nameSpace string, groupName string) (*DBGroup, error) 
 	res := pb.GroupDefinitionRequest{}
 	d := DBGroup{}
 	res.Namespace = nameSpace
-	rows, err := dbcon.Query("SELECT id,groupname,deployedversion from appgroup where groupname=$1 and namespace=$2", groupName, nameSpace)
+	rows, err := dbcon.Query("SELECT id,groupname,deployedversion,pendingversion from appgroup where groupname=$1 and namespace=$2", groupName, nameSpace)
 	if err != nil {
 		fmt.Printf("Failed to get groupname %s\n", groupName)
 		return nil, err
@@ -203,7 +204,7 @@ func getGroupFromDatabase(nameSpace string, groupName string) (*DBGroup, error) 
 	gotone := false
 	for rows.Next() {
 		gotone = true
-		err := rows.Scan(&d.id, &res.GroupID, &d.DeployedVersion)
+		err := rows.Scan(&d.id, &res.GroupID, &d.DeployedVersion, &d.PendingVersion)
 		if err != nil {
 			fmt.Printf("Failed to get row for groupname %s\n", groupName)
 			return nil, err
@@ -279,6 +280,25 @@ func saveApp(app *pb.ApplicationDefinition) (string, error) {
 		}
 	}
 	return fmt.Sprintf("%d", id), nil
+}
+
+// given a group version will load all its apps into objects
+func getGroupLatestVersion(namespace string, groupname string) (int, error) {
+	rows, err := dbcon.Query("SELECT MAX(group_version.id) as maxid from group_version,appgroup where group_id = appgroup.id and appgroup.namespace = $1 and appgroup.groupname = $2", namespace, groupname)
+	if err != nil {
+		fmt.Printf("Failed to get latest version for (%s,%s):%s\n", namespace, groupname, err)
+		return 0, err
+	}
+	for rows.Next() {
+		var maxid int
+		err = rows.Scan(&maxid)
+		if err != nil {
+			fmt.Printf("Failed to scan for latest version for (%s,%s):%s\n", namespace, groupname, err)
+			return 0, err
+		}
+		return maxid, nil
+	}
+	return 0, nil
 }
 
 // given a group version will load all its apps into objects
@@ -358,6 +378,7 @@ func updateDeployedVersionNumber(v int) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Unable to update group: %s", err))
 	}
+	fmt.Printf("Updated deployedversion to %d\n", v)
 	return nil
 }
 
@@ -457,7 +478,10 @@ func (s *DeployMonkey) DeployVersion(ctx context.Context, cr *pb.DeployRequest) 
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Invalid VersionID: \"%s\": %s", cr.VersionID, err))
 	}
-	applyVersion(version)
+	err = applyVersion(version)
+	if err != nil {
+		return nil, err
+	}
 	updateDeployedVersionNumber(version)
 	r := pb.DeployResponse{}
 	return &r, nil
@@ -485,7 +509,12 @@ func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (
 	if cur == nil {
 		return nil, errors.New(fmt.Sprintf("No such group: (%s,%s)", cr.Namespace, cr.GroupID))
 	}
-	apps, err := loadAppGroupVersion(cur.DeployedVersion)
+
+	lastVersion, err := getGroupLatestVersion(cr.Namespace, cr.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	apps, err := loadAppGroupVersion(lastVersion)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Failed to get apps for version %d from db: %s", cur.DeployedVersion, err))
 	}
@@ -524,10 +553,13 @@ func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("version group not a number (%s)? BUG!: %s", sv, err))
 	}
-	applyVersion(version)
+	err = applyVersion(version)
+	if err != nil {
+		return nil, err
+	}
 	updateDeployedVersionNumber(version)
-
-	return nil, errors.New("Deploy() in server - this codepath should never have been reached!")
+	r := pb.GroupDefResponse{Result: pb.GroupResponseStatus_CHANGEACCEPTED}
+	return &r, nil
 }
 
 // merge source into target
@@ -585,7 +617,20 @@ func (s *DeployMonkey) GetGroups(ctx context.Context, cr *pb.GetGroupsRequest) (
 	if err != nil {
 		return nil, err
 	}
-	resp.GroupNames = n
+	for _, name := range n {
+		dbg, err := getGroupFromDatabase(cr.NameSpace, name)
+		if err != nil {
+			return nil, err
+		}
+		gd := pb.GroupDef{DeployedVersion: int64(dbg.DeployedVersion),
+			PendingVersion: int64(dbg.PendingVersion),
+			GroupID:        dbg.groupDef.GroupID,
+			NameSpace:      dbg.groupDef.Namespace,
+		}
+		resp.Groups = append(resp.Groups, &gd)
+
+	}
+
 	return &resp, nil
 }
 

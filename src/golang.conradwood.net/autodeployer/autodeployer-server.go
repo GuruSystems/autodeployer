@@ -9,6 +9,8 @@ package main
 // the flag msgid goes into the startup code, so do not run the privileged daemon with that flag!
 
 import (
+	"golang.conradwood.net/client"
+
 	"fmt"
 	"google.golang.org/grpc"
 	//	"github.com/golang/protobuf/proto"
@@ -147,9 +149,6 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	}
 	fmt.Printf("Deploying %s, Build %d\n", cr.Repository, cr.BuildID)
 	users := getListOfUsers()
-	for _, un := range users {
-		fmt.Printf("User %s\n", un)
-	}
 	du := allocUser(users)
 	if du == nil {
 		return nil, errors.New("Failed to allocate a user. Server out of processes?")
@@ -176,7 +175,9 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	if binname == "" {
 		return nil, errors.New("Failed to re-exec self. check startup path of daemon")
 	}
-	cmd := exec.Command("su", "-s", binname, du.user.Username, "--", fmt.Sprintf("-msgid=%s", du.startupMsg))
+	cmd := exec.Command("su", "-s", binname, du.user.Username, "--",
+		fmt.Sprintf("-token=%s", client.GetToken()),
+		fmt.Sprintf("-msgid=%s", du.startupMsg))
 	fmt.Printf("Executing: %v\n", cmd)
 	// fill our deploystatus with stuff
 	// copy deployment request to deployment descriptor
@@ -259,6 +260,11 @@ func (s *AutoDeployer) Undeploy(ctx context.Context, cr *pb.UndeployRequest) (*p
 	return &res, nil
 }
 
+/*****************************************************
+** this is called by the starter.go
+** after it has forked, dropped privileges, and
+** before it exec's the application
+*****************************************************/
 func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupRequest) (*pb.StartupResponse, error) {
 
 	d := entryByMsg(cr.Msgid)
@@ -269,6 +275,8 @@ func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupReques
 		return nil, errors.New(fmt.Sprintf("Deployment in status %s not STARTING!", d.status))
 	}
 	d.status = pb.DeploymentStatus_DOWNLOADING
+	// we insert some args automatically
+
 	sr := &pb.StartupResponse{
 		URL:              d.url,
 		Args:             d.args,

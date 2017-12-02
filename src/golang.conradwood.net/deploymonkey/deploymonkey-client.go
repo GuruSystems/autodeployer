@@ -13,23 +13,29 @@ import (
 
 // static variables for flag parser
 var (
-	filename   = flag.String("configfile", "", "the yaml config file to submit to server")
-	namespace  = flag.String("namespace", "", "namespace of the group to update")
-	groupname  = flag.String("groupname", "", "groupname of the group to update")
-	repository = flag.String("repo", "", "repository of the app in the group to update")
-	buildid    = flag.Int("buildid", 0, "the new buildid of the app in the group to update")
+	filename      = flag.String("configfile", "", "the yaml config file to submit to server")
+	namespace     = flag.String("namespace", "", "namespace of the group to update")
+	groupname     = flag.String("groupname", "", "groupname of the group to update")
+	repository    = flag.String("repo", "", "repository of the app in the group to update")
+	buildid       = flag.Int("buildid", 0, "the new buildid of the app in the group to update")
+	apply_version = flag.Int("apply_version", 0, "(re-)apply a given version")
 )
 
 func main() {
 	flag.Parse()
 
 	done := false
+	if *apply_version != 0 {
+		applyVersion()
+		done = true
+	}
 	if *filename != "" {
 		processFile()
 		done = true
 	}
 	if *namespace != "" {
 		updateApp()
+		done = true
 	}
 	if !done {
 		listConfig()
@@ -45,6 +51,25 @@ func bail(err error, msg string) {
 	os.Exit(10)
 }
 
+func applyVersion() {
+	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
+	if err != nil {
+		fmt.Println("failed to dial: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := client.SetAuthToken()
+
+	cl := pb.NewDeployMonkeyClient(conn)
+	dr := pb.DeployRequest{VersionID: fmt.Sprintf("%d", *apply_version)}
+	resp, err := cl.DeployVersion(ctx, &dr)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err)
+		return
+	}
+	fmt.Printf("Response: %v\n", resp)
+
+}
 func listConfig() {
 	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
 	if err != nil {
@@ -62,11 +87,11 @@ func listConfig() {
 	for _, n := range ns.NameSpaces {
 		gns, err := cl.GetGroups(ctx, &pb.GetGroupsRequest{NameSpace: n})
 		bail(err, "Error getting group")
-		fmt.Printf("  %s (%d groups)\n", n, len(gns.GroupNames))
-		for _, gs := range gns.GroupNames {
+		fmt.Printf("  %s (%d groups)\n", n, len(gns.Groups))
+		for _, gs := range gns.Groups {
 			gar := pb.GetAppsRequest{
-				NameSpace: n,
-				GroupName: gs}
+				NameSpace: gs.NameSpace,
+				GroupName: gs.GroupID}
 			gapps, err := cl.GetApplications(ctx, &gar)
 			bail(err, "Failed to get applications")
 			fmt.Printf("      %s (%d applications)\n", gs, len(gapps.Applications))

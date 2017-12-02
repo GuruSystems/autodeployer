@@ -73,11 +73,19 @@ message GetNameSpaceRequest {}
 message GetNameSpaceResponse {
 repeated string NameSpaces = 1;
 }
+
 message GetGroupsRequest {
 string NameSpace=1;
 }
+
+message GroupDef {
+string GroupID=1;
+string NameSpace=2;
+int64 DeployedVersion=3;
+int64 PendingVersion=4;
+}
 message GetGroupsResponse {
-repeated string GroupNames=1;
+repeated GroupDef Groups=1;
 }
 message GetAppsRequest {
 string NameSpace=1;

@@ -332,6 +332,7 @@ func serveServiceInfo(w http.ResponseWriter, req *http.Request, sd ServerDef) {
 func pleaseShutdown(w http.ResponseWriter, req *http.Request, sd ServerDef) {
 	stopping()
 	fmt.Fprintf(w, "OK\n")
+	fmt.Printf("Received request to shutdown.\n")
 	os.Exit(0)
 }
 func startHttpServe(sd ServerDef, grpcServer *grpc.Server) error {

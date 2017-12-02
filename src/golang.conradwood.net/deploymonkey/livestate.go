@@ -64,6 +64,7 @@ func MakeItSo(groupid string, ads []*pb.ApplicationDefinition) error {
 	}
 
 	// starting stuff
+	err = nil
 	for _, app := range ads {
 		fmt.Printf("Starting %d instances of %s\n", app.Instances, app.Repository)
 		instances := 0
@@ -72,20 +73,22 @@ func MakeItSo(groupid string, ads []*pb.ApplicationDefinition) error {
 		for uint32(instances) < app.Instances {
 			retries--
 			if retries == 0 {
-				fmt.Printf("Wanted to deploy %d instances of %v, but only deployed %d\n", app.Instances, app, instances)
+				s := fmt.Sprintf("Wanted to deploy %d instances of %v, but only deployed %d", app.Instances, app, instances)
+				fmt.Println(s)
+				err = errors.New(s)
 				break
 			}
 			for _, sa := range sas {
-				err = deployOn(sa, app)
-				if err == nil {
+				terr := deployOn(sa, app)
+				if terr == nil {
 					instances++
 					break
 				}
-				fmt.Printf("failed to deploy an instance: %s (retries=%d)\n", err, retries)
+				fmt.Printf("failed to deploy an instance: %s (retries=%d)\n", terr, retries)
 			}
 		}
 	}
-	return nil
+	return err
 }
 
 func replaceVars(text string, vars map[string]string) string {
@@ -130,6 +133,7 @@ func deployOn(sa *rpb.ServiceAddress, app *pb.ApplicationDefinition) error {
 		fmt.Println(s)
 		return errors.New(s)
 	}
+	fmt.Printf("Successfully deployed %v on %v", app, sa)
 	return nil
 
 }
