@@ -148,8 +148,29 @@ func countPortCommands(args []string) int {
 
 // download a file and depending on its type extract the archive
 func downloadBinary(url string, target string, user string, pw string) error {
-	err := downloadFromURL(url, target, user, pw)
-	return err
+	outfile := target
+	archive := false
+	if strings.HasSuffix(url, ".tar") {
+		// unload an archive
+		outfile = "download.tar"
+		archive = true
+	}
+	err := downloadFromURL(url, outfile, user, pw)
+	if err != nil {
+		return err
+	}
+	if archive {
+		// extract it...
+		// (should use library not external tool!)
+		cmd := exec.Command("/bin/tar", "-xf", outfile)
+		op, err := cmd.CombinedOutput()
+		fmt.Printf("tar output: %s\n", op)
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
 }
 
 // download a file to 'target'
