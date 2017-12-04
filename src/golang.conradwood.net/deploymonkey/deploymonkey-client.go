@@ -17,7 +17,7 @@ var (
 	filename      = flag.String("configfile", "", "the yaml config file to submit to server")
 	namespace     = flag.String("namespace", "", "namespace of the group to update")
 	groupname     = flag.String("groupname", "", "groupname of the group to update")
-	repository    = flag.String("repo", "", "repository of the app in the group to update")
+	repository    = flag.String("repository", "", "repository of the app in the group to update")
 	buildid       = flag.Int("buildid", 0, "the new buildid of the app in the group to update")
 	binary        = flag.String("binary", "", "the binary of the app in the group to update")
 	apply_version = flag.Int("apply_version", 0, "(re-)apply a given version")
