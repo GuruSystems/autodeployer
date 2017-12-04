@@ -17,10 +17,6 @@ import (
 	"time"
 )
 
-const (
-	DEPLOY_PREFIX = "DM-APPDEF-"
-)
-
 // static variables for flag parser
 var (
 	port          = flag.Int("port", 4999, "The server port")
@@ -315,7 +311,6 @@ func loadAppGroupVersion(version int) ([]*pb.ApplicationDefinition, error) {
 			fmt.Printf("Failed to get app for version %d:%s\n", version, err)
 			return nil, err
 		}
-		r.DeploymentID = fmt.Sprintf("%s%d", DEPLOY_PREFIX, version)
 		res = append(res, r)
 	}
 	return res, nil
@@ -396,12 +391,20 @@ func applyVersion(v int) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Unable to update group: %s", err))
 	}
+	var ns, gn string
+	err = dbcon.QueryRow("SELECT namespace,groupname from appgroup where id = $1", gid).Scan(&ns, &gn)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Unable to get groupnames: %s", err))
+	}
+	dbgroup, err := getGroupFromDatabase(ns, gn)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Unable to get group (%s,%s) from db: %s", ns, gn, err))
+	}
 	apps, err := loadAppGroupVersion(v)
 	if err != nil {
 		return errors.New(fmt.Sprintf("error loading apps for version %d: %s", v, err))
 	}
-	deplid := fmt.Sprintf("%s%d", DEPLOY_PREFIX, v)
-	err = MakeItSo(deplid, apps)
+	err = MakeItSo(dbgroup, apps)
 	if err != nil {
 		return errors.New(fmt.Sprintf("error applyings apps for version %d: %s", v, err))
 	}

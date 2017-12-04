@@ -59,6 +59,9 @@ func Execute() {
 	fmt.Printf("Chdir() to %s\n", srp.WorkingDir)
 	// download the binary and/or archive
 	binary := "executable"
+	if srp.Binary != "" {
+		binary = srp.Binary
+	}
 	fmt.Printf("Downloading binary from %s\n", srp.URL)
 	err = downloadFromURL(srp.URL, binary, srp.DownloadUser, srp.DownloadPassword)
 	if err != nil {

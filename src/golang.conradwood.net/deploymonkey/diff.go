@@ -176,6 +176,9 @@ func isSame(ad1, ad2 *pb.ApplicationDefinition) bool {
 	if ad1.Repository != ad2.Repository {
 		return false
 	}
+	if ad1.Binary != ad2.Binary {
+		return false
+	}
 	return true
 }
 

@@ -18,6 +18,7 @@ var (
 	groupname     = flag.String("groupname", "", "groupname of the group to update")
 	repository    = flag.String("repo", "", "repository of the app in the group to update")
 	buildid       = flag.Int("buildid", 0, "the new buildid of the app in the group to update")
+	binary        = flag.String("binary", "", "the binary of the app in the group to update")
 	apply_version = flag.Int("apply_version", 0, "(re-)apply a given version")
 )
 
@@ -96,7 +97,7 @@ func listConfig() {
 			bail(err, "Failed to get applications")
 			fmt.Printf("      %s (%d applications)\n", gs, len(gapps.Applications))
 			for _, app := range gapps.Applications {
-				fmt.Printf("           Repo=%s, BuildID=#%d\n", app.Repository, app.BuildID)
+				fmt.Printf("           %dx Repo=%s, Binary=%s, BuildID=#%d\n", app.Instances, app.Repository, app.Binary, app.BuildID)
 			}
 		}
 	}
@@ -105,6 +106,7 @@ func listConfig() {
 func updateApp() {
 	ad := pb.ApplicationDefinition{
 		Repository: *repository,
+		Binary:     *binary,
 		BuildID:    uint64(*buildid),
 	}
 	uar := pb.UpdateAppRequest{

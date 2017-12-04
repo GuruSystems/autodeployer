@@ -21,18 +21,33 @@ import (
 	rpb "golang.conradwood.net/registrar/proto"
 )
 
+const (
+	DEPLOY_PREFIX = "DM-APPDEF-"
+)
+
 var (
 	ctx context.Context
 )
 
-func MakeItSo(groupid string, ads []*pb.ApplicationDefinition) error {
+// this is the most simplest, but definitely not The Right Thing to do
+// how it *should* work:
+// * work out what is currently deployed
+// * work out a difference
+// * fire up all the additional ones required (in parallel)
+// * retry failured deployments on different servers
+// * if any deployment failed: clear the "new ones" again and abort
+// * if all succeeded:
+// * clear those which are no longer needed (e.g. old ones in a lower version)
+func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 	sas, err := getDeployers()
 	if err != nil {
 		return err
 	}
 	ctx = client.SetAuthToken()
-	deplid := groupid
-	fmt.Printf("Looking for services with deplid: %s\n", deplid)
+	// deploymentid is "PREFIX-GroupID-BuildID"
+	// stop all for groupid
+	stopPrefix := fmt.Sprintf("%s-%d-", DEPLOY_PREFIX, group.id)
+	fmt.Printf("Looking for services to stop with deployment id prefix: \"%s\"\n", stopPrefix)
 	// this is way... to dumb. we do two steps:
 	// 1. shutdown all applications for this group
 	// 2. fire up new ones
@@ -49,7 +64,7 @@ func MakeItSo(groupid string, ads []*pb.ApplicationDefinition) error {
 		defer conn.Close()
 		adc := ad.NewAutoDeployerClient(conn)
 
-		apps, err := getDeployments(adc, sa, deplid)
+		apps, err := getDeployments(adc, sa, stopPrefix)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Unable to get deployments from %v: %s", sa, err))
 		}
@@ -64,28 +79,34 @@ func MakeItSo(groupid string, ads []*pb.ApplicationDefinition) error {
 	}
 
 	// starting stuff
+	// also, this should start them up multi-threaded... and bla
 	err = nil
+	workers := len(sas)
+	workeridx := 0
 	for _, app := range ads {
 		fmt.Printf("Starting %d instances of %s\n", app.Instances, app.Repository)
 		instances := 0
 
 		retries := 5
 		for uint32(instances) < app.Instances {
-			retries--
 			if retries == 0 {
 				s := fmt.Sprintf("Wanted to deploy %d instances of %v, but only deployed %d", app.Instances, app, instances)
 				fmt.Println(s)
 				err = errors.New(s)
 				break
 			}
-			for _, sa := range sas {
-				terr := deployOn(sa, app)
-				if terr == nil {
-					instances++
-					break
-				}
-				fmt.Printf("failed to deploy an instance: %s (retries=%d)\n", terr, retries)
+			workeridx++
+			if workeridx >= workers {
+				workeridx = 0
 			}
+			terr := deployOn(sas[workeridx], group, app)
+			if terr == nil {
+				instances++
+				retries = 5
+				continue
+			}
+			retries--
+			fmt.Printf("failed to deploy an instance: %s (retries=%d)\n", terr, retries)
 		}
 	}
 	return err
@@ -99,7 +120,7 @@ func replaceVars(text string, vars map[string]string) string {
 	return s
 }
 
-func deployOn(sa *rpb.ServiceAddress, app *pb.ApplicationDefinition) error {
+func deployOn(sa *rpb.ServiceAddress, group *DBGroup, app *pb.ApplicationDefinition) error {
 	fmt.Printf("Deploying %v on %v\n", app, sa)
 	conn, err := client.DialService(sa)
 	if err != nil {
@@ -111,6 +132,7 @@ func deployOn(sa *rpb.ServiceAddress, app *pb.ApplicationDefinition) error {
 	vars := make(map[string]string)
 	vars["BUILDID"] = fmt.Sprintf("%d", app.BuildID)
 	vars["REPOSITORY"] = app.Repository
+	deplid := fmt.Sprintf("%s-%d-%d", DEPLOY_PREFIX, group.id, app.BuildID)
 
 	adc := ad.NewAutoDeployerClient(conn)
 	dr := ad.DeployRequest{
@@ -121,7 +143,7 @@ func deployOn(sa *rpb.ServiceAddress, app *pb.ApplicationDefinition) error {
 		Args:             app.Args,
 		Repository:       app.Repository,
 		BuildID:          app.BuildID,
-		DeploymentID:     app.DeploymentID,
+		DeploymentID:     deplid,
 	}
 	dres, err := adc.Deploy(ctx, &dr)
 	if err != nil {
@@ -148,7 +170,7 @@ func getDeployments(adc ad.AutoDeployerClient, sa *rpb.ServiceAddress, deplid st
 	}
 	for _, app := range info.Apps {
 		dr := app.Deployment
-		if dr.DeploymentID != deplid {
+		if !strings.HasPrefix(dr.DeploymentID, deplid) {
 			continue
 		}
 		res = append(res, app.ID)
