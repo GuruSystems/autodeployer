@@ -10,6 +10,7 @@ package main
 
 import (
 	"golang.conradwood.net/client"
+	"golang.conradwood.net/logger"
 
 	"fmt"
 	"google.golang.org/grpc"
@@ -17,6 +18,7 @@ import (
 	"errors"
 	"flag"
 	pb "golang.conradwood.net/autodeployer/proto"
+	lpb "golang.conradwood.net/logservice/proto"
 	"golang.conradwood.net/server"
 	"golang.org/x/net/context"
 	"io"
@@ -51,6 +53,8 @@ type Deployed struct {
 	ports        []int
 	user         *user.User
 	cmd          *exec.Cmd
+	namespace    string
+	groupname    string
 	repo         string
 	build        uint64
 	exitCode     error
@@ -64,6 +68,7 @@ type Deployed struct {
 	downloadUser string
 	downloadPW   string
 	deploymentID string
+	logger       *logger.AsyncLogQueue
 }
 
 // callback from the compound initialisation
@@ -157,6 +162,8 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	du.repo = cr.Repository
 	du.build = cr.BuildID
 	du.deploymentID = cr.DeploymentID
+	du.namespace = cr.Namespace
+	du.groupname = cr.Groupname
 	_, wd := filepath.Split(du.user.HomeDir)
 	wd = fmt.Sprintf("/srv/autodeployer/deployments/%s", wd)
 	fmt.Printf("Deploying \"%s\" as user \"%s\" in %s\n", cr.Repository, du.user.Username, wd)
@@ -325,6 +332,24 @@ func waitForCommand(du *Deployed) {
 		}
 		line := lineOut.gotBytes(buf, ct)
 		if line != "" {
+			ad := lpb.LogAppDef{
+				Status:       fmt.Sprintf("%s", du.status),
+				Appname:      du.binary,
+				Repository:   du.repo,
+				Groupname:    du.groupname,
+				Namespace:    du.namespace,
+				DeploymentID: du.deploymentID,
+				StartupID:    du.startupMsg,
+			}
+			req := lpb.LogRequest{
+				AppDef: &ad,
+			}
+			r := lpb.LogLine{
+				Time: time.Now().Unix(),
+				Line: line,
+			}
+			req.Lines = append(req.Lines, &r)
+			du.logger.LogCommandStdout(&req)
 			fmt.Printf(">>>>COMMAND: %s: %s\n", du.toString(), line)
 			du.lastLine = line
 		}
@@ -342,6 +367,9 @@ func waitForCommand(du *Deployed) {
 	}
 
 	Slay(du.user.Username)
+	if du.logger != nil {
+		du.logger.Flush()
+	}
 }
 func Slay(username string) {
 	// we clean up - to make sure we really really release resources, we "slay" the user
@@ -432,7 +460,10 @@ func entryForUser(user *user.User) *Deployed {
 			return d
 		}
 	}
+
+	// we create a new Deployed (for a given user)
 	d := &Deployed{user: user, idle: true}
+
 	deployed = append(deployed, d)
 	return d
 }
@@ -455,8 +486,7 @@ func allocUser(users []*user.User) *Deployed {
 		for _, u := range users {
 			d := entryForUser(u)
 			if d.idle {
-				d.idle = false
-				d.status = pb.DeploymentStatus_PREPARING
+				allocEntry(d)
 				return d
 			}
 		}
@@ -473,6 +503,10 @@ func allocUser(users []*user.User) *Deployed {
 				// terminated and not idle
 				if time.Since(d.finished) > (time.Duration(*idleReaper) * time.Second) {
 					// and that for some time...
+					if d.logger != nil {
+						d.logger.Flush()
+						d.logger = nil
+					}
 					d.idle = true
 					fmt.Printf("Reclaimed %s\n", d.toString())
 					needclean = true
@@ -484,6 +518,20 @@ func allocUser(users []*user.User) *Deployed {
 		}
 	}
 	return nil
+}
+
+// prepares an allocEntry for usage
+func allocEntry(d *Deployed) {
+
+	d.idle = false
+	d.status = pb.DeploymentStatus_PREPARING
+
+	l, err := logger.NewAsyncLogQueue()
+	if err != nil {
+		fmt.Printf("Failed to initialize logger! %s\n", err)
+	} else {
+		d.logger = l
+	}
 }
 
 // creates a pristine, fresh, empty, standard nice working directory
