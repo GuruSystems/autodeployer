@@ -3,6 +3,7 @@ package main
 // instruct the autodeployer on a given server to download & deploy stuff
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"golang.conradwood.net/client"
@@ -16,7 +17,7 @@ var (
 	filename      = flag.String("configfile", "", "the yaml config file to submit to server")
 	namespace     = flag.String("namespace", "", "namespace of the group to update")
 	groupname     = flag.String("groupname", "", "groupname of the group to update")
-	repository    = flag.String("repo", "", "repository of the app in the group to update")
+	repository    = flag.String("repository", "", "repository of the app in the group to update")
 	buildid       = flag.Int("buildid", 0, "the new buildid of the app in the group to update")
 	binary        = flag.String("binary", "", "the binary of the app in the group to update")
 	apply_version = flag.Int("apply_version", 0, "(re-)apply a given version")
@@ -35,14 +36,19 @@ func main() {
 		done = true
 	}
 	if *namespace != "" {
-		updateApp()
+		if *binary != "" {
+			updateApp()
+		} else {
+			updateRepo()
+		}
 		done = true
 	}
 	if !done {
 		listConfig()
 		fmt.Printf("Nothing to do.\n")
+		os.Exit(1)
 	}
-	os.Exit(1)
+	os.Exit(0)
 }
 func bail(err error, msg string) {
 	if err == nil {
@@ -101,6 +107,37 @@ func listConfig() {
 			}
 		}
 	}
+}
+
+func updateRepo() {
+	if *namespace == "" {
+		bail(errors.New("Namespace required"), "Cannot update repo")
+	}
+	if *groupname == "" {
+		bail(errors.New("Groupname required"), "Cannot update repo")
+	}
+	if *repository == "" {
+		bail(errors.New("Repository required"), "Cannot update repo")
+	}
+	if *buildid == 0 {
+		bail(errors.New("BuildID required"), "Cannot update repo")
+	}
+	fmt.Printf("Updating all apps in repo %s in group %s to buildid %d\n", *repository, *groupname, *buildid)
+	ur := pb.UpdateRepoRequest{
+		Namespace:  *namespace,
+		GroupID:    *groupname,
+		Repository: *repository,
+		BuildID:    uint64(*buildid),
+	}
+	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
+	bail(err, "Failed to dial")
+	defer conn.Close()
+	ctx := client.SetAuthToken()
+	cl := pb.NewDeployMonkeyClient(conn)
+	resp, err := cl.UpdateRepo(ctx, &ur)
+	bail(err, "Failed to update repo")
+	fmt.Printf("Response to updaterepo: %v\n", resp)
+	return
 }
 
 func updateApp() {

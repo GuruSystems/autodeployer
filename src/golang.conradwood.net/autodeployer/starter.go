@@ -63,7 +63,7 @@ func Execute() {
 		binary = srp.Binary
 	}
 	fmt.Printf("Downloading binary from %s\n", srp.URL)
-	err = downloadFromURL(srp.URL, binary, srp.DownloadUser, srp.DownloadPassword)
+	err = downloadBinary(srp.URL, binary, srp.DownloadUser, srp.DownloadPassword)
 	if err != nil {
 		fmt.Printf("Failed to download from %s: %s\n", srp.URL, err)
 		os.Exit(10)
@@ -146,6 +146,34 @@ func countPortCommands(args []string) int {
 	return res
 }
 
+// download a file and depending on its type extract the archive
+func downloadBinary(url string, target string, user string, pw string) error {
+	outfile := target
+	archive := false
+	if strings.HasSuffix(url, ".tar") {
+		// unload an archive
+		outfile = "download.tar"
+		archive = true
+	}
+	err := downloadFromURL(url, outfile, user, pw)
+	if err != nil {
+		return err
+	}
+	if archive {
+		// extract it...
+		// (should use library not external tool!)
+		cmd := exec.Command("/bin/tar", "-xf", outfile)
+		op, err := cmd.CombinedOutput()
+		fmt.Printf("tar output: %s\n", op)
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
+}
+
+// download a file to 'target'
 func downloadFromURL(url string, target string, user string, pw string) error {
 	fileName := target
 	fmt.Println("Downloading", url, "to", fileName)

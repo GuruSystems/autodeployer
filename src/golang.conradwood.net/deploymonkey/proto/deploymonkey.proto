@@ -94,9 +94,18 @@ string GroupName=2;
 message GetAppsResponse {
 repeated ApplicationDefinition Applications=4;
 }
+message UpdateRepoRequest {
+string Namespace=1;
+string GroupID=2;
+string Repository=3;
+uint64 BuildID=4;
+}
 service DeployMonkey {
 rpc DefineGroup(GroupDefinitionRequest) returns (GroupDefResponse);
 rpc DeployVersion(DeployRequest) returns (DeployResponse);
+// update all apps in a repo in a group to a new buildid
+rpc UpdateRepo(UpdateRepoRequest) returns (GroupDefResponse);
+// update a single app to a new buildid
 rpc UpdateApp(UpdateAppRequest) returns (GroupDefResponse);
 rpc GetNameSpaces(GetNameSpaceRequest) returns (GetNameSpaceResponse);
 rpc GetGroups(GetGroupsRequest) returns (GetGroupsResponse);
