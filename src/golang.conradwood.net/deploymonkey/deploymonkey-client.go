@@ -121,6 +121,7 @@ func updateRepo() {
 	if *buildid == 0 {
 		bail(errors.New("BuildID required"), "Cannot update repo")
 	}
+	fmt.Printf("Updating all apps in repo %s in group %s to buildid %d\n", *repository, *groupname, *buildid)
 	ur := pb.UpdateRepoRequest{
 		Namespace:  *namespace,
 		GroupID:    *groupname,
