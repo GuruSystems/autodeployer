@@ -46,8 +46,9 @@ func main() {
 	if !done {
 		listConfig()
 		fmt.Printf("Nothing to do.\n")
+		os.Exit(1)
 	}
-	os.Exit(1)
+	os.Exit(0)
 }
 func bail(err error, msg string) {
 	if err == nil {
