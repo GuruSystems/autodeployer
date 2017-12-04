@@ -533,7 +533,7 @@ func (s *DeployMonkey) UpdateRepo(ctx context.Context, cr *pb.UpdateRepoRequest)
 			continue
 		}
 		fmt.Printf("Updating app: %s\n", app.Repository)
-		app.Repository = cr.Repository
+		app.BuildID = cr.BuildID
 		foundone = true
 	}
 	if !foundone {
