@@ -501,7 +501,8 @@ func (s *DeployMonkey) UpdateRepo(ctx context.Context, cr *pb.UpdateRepoRequest)
 	if cr.Repository == "" {
 		return nil, errors.New("App Repository required")
 	}
-
+	fmt.Printf("Updating all apps in repository %s in (%s,%s) to buildid: %d\n", cr.Repository,
+		cr.Namespace, cr.GroupID, cr.BuildID)
 	err := initDB()
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Failed to initdb: %s", err))
