@@ -3,6 +3,7 @@ package main
 // instruct the autodeployer on a given server to download & deploy stuff
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"golang.conradwood.net/client"
@@ -35,7 +36,11 @@ func main() {
 		done = true
 	}
 	if *namespace != "" {
-		updateApp()
+		if *binary != "" {
+			updateApp()
+		} else {
+			updateRepo()
+		}
 		done = true
 	}
 	if !done {
@@ -101,6 +106,36 @@ func listConfig() {
 			}
 		}
 	}
+}
+
+func updateRepo() {
+	if *namespace == "" {
+		bail(errors.New("Namespace required"), "Cannot update repo")
+	}
+	if *groupname == "" {
+		bail(errors.New("Groupname required"), "Cannot update repo")
+	}
+	if *repository == "" {
+		bail(errors.New("Repository required"), "Cannot update repo")
+	}
+	if *buildid == 0 {
+		bail(errors.New("BuildID required"), "Cannot update repo")
+	}
+	ur := pb.UpdateRepoRequest{
+		Namespace:  *namespace,
+		GroupID:    *groupname,
+		Repository: *repository,
+		BuildID:    uint64(*buildid),
+	}
+	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
+	bail(err, "Failed to dial")
+	defer conn.Close()
+	ctx := client.SetAuthToken()
+	cl := pb.NewDeployMonkeyClient(conn)
+	resp, err := cl.UpdateRepo(ctx, &ur)
+	bail(err, "Failed to update repo")
+	fmt.Printf("Response to updaterepo: %v\n", resp)
+	return
 }
 
 func updateApp() {
