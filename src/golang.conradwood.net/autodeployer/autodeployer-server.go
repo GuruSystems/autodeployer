@@ -9,11 +9,12 @@ package main
 // the flag msgid goes into the startup code, so do not run the privileged daemon with that flag!
 
 import (
+	"fmt"
 	"golang.conradwood.net/client"
 	"golang.conradwood.net/logger"
-
-	"fmt"
 	"google.golang.org/grpc"
+	"os/signal"
+	"syscall"
 	//	"github.com/golang/protobuf/proto"
 	"errors"
 	"flag"
@@ -79,7 +80,24 @@ func st(server *grpc.Server) error {
 	return nil
 }
 
+func stopping() {
+	fmt.Printf("Shutdown request received, slaying everyone...\n")
+	slayAll()
+	fmt.Printf("Shutting down, slayed everyone...\n")
+	os.Exit(0)
+}
 func main() {
+	// catch ctrl-c (for system shutdown)
+	// and signal child processes
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		stopping()
+		os.Exit(0)
+	}()
+	defer stopping()
+
 	flag.Parse() // parse stuff. see "var" section above
 	if *msgid != "" {
 		Execute()
@@ -91,17 +109,7 @@ func main() {
 	}
 
 	// we are brutal - if we startup we slay all deployment users
-	users := getListOfUsers()
-	var wg sync.WaitGroup
-	for _, un := range users {
-		wg.Add(1)
-		go func(user string) {
-			defer wg.Done()
-			Slay(user)
-		}(un.Username)
-	}
-	wg.Wait()
-
+	slayAll()
 	sd := server.ServerDef{
 		Port: *port,
 	}
@@ -116,7 +124,19 @@ func main() {
 }
 
 //*********************************************************************
+func slayAll() {
+	users := getListOfUsers()
+	var wg sync.WaitGroup
+	for _, un := range users {
+		wg.Add(1)
+		go func(user string) {
+			defer wg.Done()
+			Slay(user)
+		}(un.Username)
+	}
+	wg.Wait()
 
+}
 func testing() {
 	time.Sleep(time.Second * 1) // server needs starting up...
 	ad := new(AutoDeployer)
