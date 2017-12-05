@@ -481,43 +481,45 @@ func entryByMsg(msgid string) *Deployed {
 // given a list of users will pick one that is currently not used for deployment
 // returns username
 func allocUser(users []*user.User) *Deployed {
-	needclean := true
-	for {
-		for _, u := range users {
-			d := entryForUser(u)
-			if d.idle {
-				allocEntry(d)
-				return d
-			}
-		}
-		// if we find nothing, we'll clean out old terminated tasks
-		if needclean {
-			needclean = false
-			for _, d := range deployed {
-				if d.status != pb.DeploymentStatus_TERMINATED {
-					continue
-				}
-				if d.idle == true {
-					continue
-				}
-				// terminated and not idle
-				if time.Since(d.finished) > (time.Duration(*idleReaper) * time.Second) {
-					// and that for some time...
-					if d.logger != nil {
-						d.logger.Flush()
-						d.logger = nil
-					}
-					d.idle = true
-					fmt.Printf("Reclaimed %s\n", d.toString())
-					needclean = true
-					break
-				}
-			}
-		} else {
-			return nil
+	for _, d := range deployed {
+		freeEntry(d)
+	}
+
+	for _, u := range users {
+		d := entryForUser(u)
+		if d.idle {
+			allocEntry(d)
+			return d
 		}
 	}
+
 	return nil
+}
+
+// frees an entry for later usage
+func freeEntry(d *Deployed) {
+	// it's already idle, nothing to do
+	if d.idle {
+		return
+	}
+	// it's not idle and not terminated, so keep it!
+	if d.status != pb.DeploymentStatus_TERMINATED {
+		return
+	}
+
+	// it's too soon after process terminated, we keep it around for a bit
+	if time.Since(d.finished) < (time.Duration(*idleReaper) * time.Second) {
+		return
+	}
+	if d.logger != nil {
+		d.logger.Flush()
+		d.logger = nil
+	}
+
+	os.RemoveAll(d.workingDir)
+	d.idle = true
+	fmt.Printf("Reclaimed %s\n", d.toString())
+
 }
 
 // prepares an allocEntry for usage
