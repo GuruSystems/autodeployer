@@ -9,11 +9,12 @@ package main
 // the flag msgid goes into the startup code, so do not run the privileged daemon with that flag!
 
 import (
+	"fmt"
 	"golang.conradwood.net/client"
 	"golang.conradwood.net/logger"
-
-	"fmt"
 	"google.golang.org/grpc"
+	"os/signal"
+	"syscall"
 	//	"github.com/golang/protobuf/proto"
 	"errors"
 	"flag"
@@ -79,7 +80,24 @@ func st(server *grpc.Server) error {
 	return nil
 }
 
+func stopping() {
+	fmt.Printf("Shutdown request received, slaying everyone...\n")
+	slayAll()
+	fmt.Printf("Shutting down, slayed everyone...\n")
+	os.Exit(0)
+}
 func main() {
+	// catch ctrl-c (for system shutdown)
+	// and signal child processes
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		stopping()
+		os.Exit(0)
+	}()
+	defer stopping()
+
 	flag.Parse() // parse stuff. see "var" section above
 	if *msgid != "" {
 		Execute()
@@ -91,17 +109,7 @@ func main() {
 	}
 
 	// we are brutal - if we startup we slay all deployment users
-	users := getListOfUsers()
-	var wg sync.WaitGroup
-	for _, un := range users {
-		wg.Add(1)
-		go func(user string) {
-			defer wg.Done()
-			Slay(user)
-		}(un.Username)
-	}
-	wg.Wait()
-
+	slayAll()
 	sd := server.ServerDef{
 		Port: *port,
 	}
@@ -116,7 +124,19 @@ func main() {
 }
 
 //*********************************************************************
+func slayAll() {
+	users := getListOfUsers()
+	var wg sync.WaitGroup
+	for _, un := range users {
+		wg.Add(1)
+		go func(user string) {
+			defer wg.Done()
+			Slay(user)
+		}(un.Username)
+	}
+	wg.Wait()
 
+}
 func testing() {
 	time.Sleep(time.Second * 1) // server needs starting up...
 	ad := new(AutoDeployer)
@@ -482,44 +502,45 @@ func entryByMsg(msgid string) *Deployed {
 // given a list of users will pick one that is currently not used for deployment
 // returns username
 func allocUser(users []*user.User) *Deployed {
-	needclean := true
-	for {
-		for _, u := range users {
-			d := entryForUser(u)
-			if d.idle {
-				allocEntry(d)
-				return d
-			}
-		}
-		// if we find nothing, we'll clean out old terminated tasks
-		if needclean {
-			needclean = false
-			for _, d := range deployed {
-				if d.status != pb.DeploymentStatus_TERMINATED {
-					continue
-				}
-				if d.idle == true {
-					continue
-				}
-				// terminated and not idle
-				if time.Since(d.finished) > (time.Duration(*idleReaper) * time.Second) {
-					// and that for some time...
-					if d.logger != nil {
-						d.logger.Flush()
-						d.logger = nil
-					}
-					d.idle = true
-					fmt.Printf("Reclaimed %s\n", d.toString())
-					needclean = true
-					break
-				}
-			}
-		} else {
-			return nil
+	for _, d := range deployed {
+		freeEntry(d)
+	}
+
+	for _, u := range users {
+		d := entryForUser(u)
+		if d.idle {
+			allocEntry(d)
+			return d
 		}
 	}
 	fmt.Printf("Given %d users, found NO free entry\n", len(users))
 	return nil
+}
+
+// frees an entry for later usage
+func freeEntry(d *Deployed) {
+	// it's already idle, nothing to do
+	if d.idle {
+		return
+	}
+	// it's not idle and not terminated, so keep it!
+	if d.status != pb.DeploymentStatus_TERMINATED {
+		return
+	}
+
+	// it's too soon after process terminated, we keep it around for a bit
+	if time.Since(d.finished) < (time.Duration(*idleReaper) * time.Second) {
+		return
+	}
+	if d.logger != nil {
+		d.logger.Flush()
+		d.logger = nil
+	}
+
+	os.RemoveAll(d.workingDir)
+	d.idle = true
+	fmt.Printf("Reclaimed %s\n", d.toString())
+
 }
 
 // prepares an allocEntry for usage
