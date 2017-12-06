@@ -156,6 +156,7 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	users := getListOfUsers()
 	du := allocUser(users)
 	if du == nil {
+		fmt.Printf("allocUser returned no deployment entry ;(\n")
 		return nil, errors.New("Failed to allocate a user. Server out of processes?")
 	}
 	du.started = time.Now()
@@ -517,6 +518,7 @@ func allocUser(users []*user.User) *Deployed {
 			return nil
 		}
 	}
+	fmt.Printf("Given %d users, found NO free entry\n", len(users))
 	return nil
 }
 
