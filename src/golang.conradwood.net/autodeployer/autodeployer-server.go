@@ -303,8 +303,8 @@ func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupReques
 		return nil, errors.New(fmt.Sprintf("Deployment in status %s not STARTING!", d.status))
 	}
 	d.status = pb.DeploymentStatus_DOWNLOADING
-	// we insert some args automatically
-
+	// work out the path...
+	path := fmt.Sprintf("%s/%s/%s/%d", d.namespace, d.groupname, d.repo, d.build)
 	sr := &pb.StartupResponse{
 		URL:              d.url,
 		Args:             d.args,
@@ -312,6 +312,7 @@ func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupReques
 		DownloadUser:     d.downloadUser,
 		DownloadPassword: d.downloadPW,
 		WorkingDir:       d.workingDir,
+		Gurupath:         path,
 	}
 	return sr, nil
 }
@@ -413,7 +414,6 @@ func (s *AutoDeployer) AllocResources(ctx context.Context, cr *pb.ResourceReques
 	d.status = pb.DeploymentStatus_RESOURCING
 	fmt.Printf("Going into singleton port lock...\n")
 	portLock.Lock()
-	// lock this!
 	for i := 0; i < int(cr.Ports); i++ {
 		res.Ports = append(res.Ports, allocPort(d))
 	}
