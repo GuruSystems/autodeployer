@@ -547,7 +547,6 @@ func freeEntry(d *Deployed) {
 
 // prepares an allocEntry for usage
 func allocEntry(d *Deployed) {
-
 	d.idle = false
 	d.status = pb.DeploymentStatus_PREPARING
 	checkLogger(d)
@@ -603,6 +602,7 @@ func getListOfUsers() []*user.User {
 		un := fmt.Sprintf("deploy%d", i)
 		u, err := user.Lookup(un)
 		if err != nil {
+			fmt.Printf("Max users: %d (ended with %s)\n", i, err)
 			break
 		}
 		res = append(res, u)
