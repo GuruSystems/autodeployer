@@ -317,6 +317,7 @@ func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupReques
 	sr.Args = append(sr.Args, fmt.Sprintf("-deployment_gurupath=%s", path))
 	return sr, nil
 }
+
 func (s *AutoDeployer) Started(ctx context.Context, cr *pb.StartedRequest) (*pb.EmptyResponse, error) {
 	d := entryByMsg(cr.Msgid)
 	if d == nil {
