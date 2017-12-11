@@ -303,8 +303,7 @@ func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupReques
 		return nil, errors.New(fmt.Sprintf("Deployment in status %s not STARTING!", d.status))
 	}
 	d.status = pb.DeploymentStatus_DOWNLOADING
-	// work out the path...
-	path := fmt.Sprintf("%s/%s/%s/%d", d.namespace, d.groupname, d.repo, d.build)
+
 	sr := &pb.StartupResponse{
 		URL:              d.url,
 		Args:             d.args,
@@ -312,8 +311,10 @@ func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupReques
 		DownloadUser:     d.downloadUser,
 		DownloadPassword: d.downloadPW,
 		WorkingDir:       d.workingDir,
-		Gurupath:         path,
 	}
+	// add some standard args (which we pass to ALL deployments)
+	path := fmt.Sprintf("%s/%s/%s/%d", d.namespace, d.groupname, d.repo, d.build)
+	sr.Args = append(sr.Args, fmt.Sprintf("-deployment_gurupath=%s", path))
 	return sr, nil
 }
 func (s *AutoDeployer) Started(ctx context.Context, cr *pb.StartedRequest) (*pb.EmptyResponse, error) {

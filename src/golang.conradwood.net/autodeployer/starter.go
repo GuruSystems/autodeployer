@@ -81,8 +81,7 @@ func Execute() {
 	fmt.Printf("Start commandline: %s %v (%d ports)\n", binary, srp.Args, ports)
 	rArgs := replacePorts(srp.Args, resources.Ports)
 	fmt.Printf("Starting binary \"%s\" with %d args:\n", binary, len(srp.Args))
-	// ******* we add STANDARD args for deployment here *******/
-	rArgs = append(rArgs, fmt.Sprintf("-deployment_gurupath=%s", srp.Gurupath))
+
 	for _, s := range rArgs {
 		fmt.Printf("Arg: \"%s\"\n", s)
 	}

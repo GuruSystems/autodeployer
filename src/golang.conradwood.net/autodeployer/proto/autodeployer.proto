@@ -64,7 +64,6 @@ string URL=1;
 string Binary=4;
 repeated string Args=5;
 string WorkingDir=6;
-string Gurupath=7;
 }
 
 message ResourceRequest {
