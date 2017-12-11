@@ -20,10 +20,11 @@ type AsyncLogQueue struct {
 
 func NewAsyncLogQueue() (*AsyncLogQueue, error) {
 	alq := &AsyncLogQueue{}
-	t := time.NewTimer(2 * time.Second)
+	t := time.NewTicker(2 * time.Second)
 	go func(a *AsyncLogQueue) {
-		<-t.C
-		a.Flush()
+		for _ = range t.C {
+			a.Flush()
+		}
 	}(alq)
 	return alq, nil
 }

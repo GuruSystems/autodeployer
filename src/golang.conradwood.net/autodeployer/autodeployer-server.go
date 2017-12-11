@@ -355,6 +355,7 @@ func waitForCommand(du *Deployed) {
 		}
 		line := lineOut.gotBytes(buf, ct)
 		if line != "" {
+			checkLogger(du)
 			ad := lpb.LogAppDef{
 				Status:       fmt.Sprintf("%s", du.status),
 				Appname:      du.binary,
@@ -549,7 +550,13 @@ func allocEntry(d *Deployed) {
 
 	d.idle = false
 	d.status = pb.DeploymentStatus_PREPARING
+	checkLogger(d)
+}
 
+func checkLogger(d *Deployed) {
+	if d.logger != nil {
+		return
+	}
 	l, err := logger.NewAsyncLogQueue()
 	if err != nil {
 		fmt.Printf("Failed to initialize logger! %s\n", err)

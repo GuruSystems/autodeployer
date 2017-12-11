@@ -70,6 +70,13 @@ type serverDef struct {
 func (s *serverDef) toString() string {
 	return fmt.Sprintf(":%d %s (%v)", s.Port, s.name, s.types)
 }
+func NewTCPServerDef(name string) *serverDef {
+	sd := NewServerDef()
+	sd.types = sd.types[:0]
+	sd.types = append(sd.types, pb.Apitype_tcp)
+	sd.name = name
+	return sd
+}
 func NewServerDef() *serverDef {
 	res := &serverDef{}
 	res.Key = Privatekey

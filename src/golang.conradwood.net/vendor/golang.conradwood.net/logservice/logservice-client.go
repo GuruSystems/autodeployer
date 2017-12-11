@@ -120,7 +120,9 @@ func follow() {
 }
 
 func printLogEntry(e *pb.LogEntry) {
-	fmt.Printf("%d %s %s %s/%s/%s (%s): %s\n", e.ID, e.Host, e.AppDef.Status,
+	t := time.Unix(int64(e.Occured), 0)
+	ts := t.String()
+	fmt.Printf("%s %d %s %s %s/%s/%s (%s): %s\n", ts, e.ID, e.Host, e.AppDef.Status,
 		e.AppDef.Repository, e.AppDef.Groupname, e.AppDef.Appname,
 		e.AppDef.StartupID, e.Line)
 }

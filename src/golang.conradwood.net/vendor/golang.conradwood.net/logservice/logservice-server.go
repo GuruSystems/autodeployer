@@ -38,10 +38,9 @@ func st(server *grpc.Server) error {
 func main() {
 	var err error
 	flag.Parse() // parse stuff. see "var" section above
-	sd := server.ServerDef{
-		Port: *port,
-	}
-
+	sd := server.NewServerDef()
+	sd.Port = *port
+	sd.Register = st
 	dbinfo := fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=require",
 		*dbhost, *dbuser, *dbpw, *dbdb)
 	dbcon, err = sql.Open("postgres", dbinfo)
@@ -50,7 +49,6 @@ func main() {
 		os.Exit(10)
 	}
 
-	sd.Register = st
 	err = server.ServerStartup(sd)
 	if err != nil {
 		fmt.Printf("failed to start server: %s\n", err)
