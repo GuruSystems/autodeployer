@@ -38,6 +38,10 @@ func main() {
 		follow()
 		os.Exit(0)
 	}
+	if len(lines) == 0 {
+		showLog()
+		os.Exit(0)
+	}
 	queue, err := logger.NewAsyncLogQueue()
 	bail(err, "Failed to create log queue")
 	ad := pb.LogAppDef{
@@ -67,7 +71,29 @@ func main() {
 	bail(err, "Failed to send log")
 	fmt.Printf("Done.\n")
 }
+func showLog() {
+	conn, err := client.DialWrapper("logservice.LogService")
+	bail(err, "Failed to dial")
+	defer conn.Close()
+	ctx := client.SetAuthToken()
 
+	cl := pb.NewLogServiceClient(conn)
+
+	minlog := int64(-500)
+	glr := pb.GetLogRequest{
+		MinimumLogID: minlog,
+	}
+	lr, err := cl.GetLogCommandStdout(ctx, &glr)
+	bail(err, "Failed to get Logcommandstdout")
+	for _, entry := range lr.Entries {
+		printLogEntry(entry)
+		if int64(entry.ID) >= minlog {
+			minlog = int64(entry.ID)
+		}
+	}
+	time.Sleep(1 * time.Second)
+
+}
 func follow() {
 	conn, err := client.DialWrapper("logservice.LogService")
 	bail(err, "Failed to dial")
@@ -84,11 +110,17 @@ func follow() {
 		lr, err := cl.GetLogCommandStdout(ctx, &glr)
 		bail(err, "Failed to get Logcommandstdout")
 		for _, entry := range lr.Entries {
-			fmt.Printf("Log: %v\n", entry)
+			printLogEntry(entry)
 			if int64(entry.ID) >= minlog {
 				minlog = int64(entry.ID)
 			}
 		}
 		time.Sleep(1 * time.Second)
 	}
+}
+
+func printLogEntry(e *pb.LogEntry) {
+	fmt.Printf("%d %s %s %s/%s/%s (%s): %s\n", e.ID, e.Host, e.AppDef.Status,
+		e.AppDef.Repository, e.AppDef.Groupname, e.AppDef.Appname,
+		e.AppDef.StartupID, e.Line)
 }

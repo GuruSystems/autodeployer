@@ -12,6 +12,7 @@ import (
 	"fmt"
 	ad "golang.conradwood.net/autodeployer/proto"
 	"golang.conradwood.net/client"
+	"golang.conradwood.net/cmdline"
 	"golang.org/x/net/context"
 	"strings"
 
@@ -198,9 +199,9 @@ func getDeployments(adc ad.AutoDeployerClient, sa *rpb.ServiceAddress, deplid st
 // get all registered deployers and their RPC address
 func getDeployers() ([]*rpb.ServiceAddress, error) {
 	opts := []grpc.DialOption{grpc.WithInsecure()}
-	conn, err := grpc.Dial(client.GetRegistryAddress(), opts...)
+	conn, err := grpc.Dial(cmdline.GetRegistryAddress(), opts...)
 	if err != nil {
-		fmt.Printf("Error dialling registry @ %s\n", client.GetRegistryAddress())
+		fmt.Printf("Error dialling registry @ %s\n", cmdline.GetRegistryAddress())
 		return nil, err
 	}
 	defer conn.Close()

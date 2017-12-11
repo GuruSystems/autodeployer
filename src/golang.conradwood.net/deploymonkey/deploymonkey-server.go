@@ -49,9 +49,9 @@ func main() {
 		}
 		os.Exit(0)
 	}
-	sd := server.ServerDef{
-		Port: *port,
-	}
+	sd := server.NewServerDef()
+	sd.Port = *port
+
 	err := applyAllVersions(false)
 	if err != nil {
 		fmt.Printf("Failed to apply all versions: %s\n", err)
