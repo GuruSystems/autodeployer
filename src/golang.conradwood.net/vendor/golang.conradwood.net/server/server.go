@@ -214,7 +214,7 @@ func stopping() {
 		fmt.Printf("Deregistering Service \"%s\"\n", sd.toString())
 		_, err := c.DeregisterService(context.Background(), &pb.DeregisterRequest{ServiceID: sd.registered_id})
 		if err != nil {
-			fmt.Printf("Failed to deregister Service \"%v\": %s\n", sd, err)
+			fmt.Printf("Failed to deregister Service \"%s\": %s\n", sd.toString(), err)
 		}
 	}
 	stopped = true
