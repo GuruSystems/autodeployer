@@ -112,7 +112,6 @@ func main() {
 	slayAll()
 	sd := server.NewServerDef()
 	sd.Port = *port
-
 	sd.Register = st
 	err := server.ServerStartup(sd)
 	if err != nil {
@@ -303,7 +302,6 @@ func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupReques
 		return nil, errors.New(fmt.Sprintf("Deployment in status %s not STARTING!", d.status))
 	}
 	d.status = pb.DeploymentStatus_DOWNLOADING
-	// we insert some args automatically
 
 	sr := &pb.StartupResponse{
 		URL:              d.url,
@@ -313,8 +311,12 @@ func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupReques
 		DownloadPassword: d.downloadPW,
 		WorkingDir:       d.workingDir,
 	}
+	// add some standard args (which we pass to ALL deployments)
+	path := fmt.Sprintf("%s/%s/%s/%d", d.namespace, d.groupname, d.repo, d.build)
+	sr.Args = append(sr.Args, fmt.Sprintf("-deployment_gurupath=%s", path))
 	return sr, nil
 }
+
 func (s *AutoDeployer) Started(ctx context.Context, cr *pb.StartedRequest) (*pb.EmptyResponse, error) {
 	d := entryByMsg(cr.Msgid)
 	if d == nil {
@@ -353,6 +355,7 @@ func waitForCommand(du *Deployed) {
 		}
 		line := lineOut.gotBytes(buf, ct)
 		if line != "" {
+			checkLogger(du)
 			ad := lpb.LogAppDef{
 				Status:       fmt.Sprintf("%s", du.status),
 				Appname:      du.binary,
@@ -413,7 +416,6 @@ func (s *AutoDeployer) AllocResources(ctx context.Context, cr *pb.ResourceReques
 	d.status = pb.DeploymentStatus_RESOURCING
 	fmt.Printf("Going into singleton port lock...\n")
 	portLock.Lock()
-	// lock this!
 	for i := 0; i < int(cr.Ports); i++ {
 		res.Ports = append(res.Ports, allocPort(d))
 	}
@@ -545,10 +547,15 @@ func freeEntry(d *Deployed) {
 
 // prepares an allocEntry for usage
 func allocEntry(d *Deployed) {
-
 	d.idle = false
 	d.status = pb.DeploymentStatus_PREPARING
+	checkLogger(d)
+}
 
+func checkLogger(d *Deployed) {
+	if d.logger != nil {
+		return
+	}
 	l, err := logger.NewAsyncLogQueue()
 	if err != nil {
 		fmt.Printf("Failed to initialize logger! %s\n", err)
@@ -595,6 +602,7 @@ func getListOfUsers() []*user.User {
 		un := fmt.Sprintf("deploy%d", i)
 		u, err := user.Lookup(un)
 		if err != nil {
+			fmt.Printf("Max users: %d (ended with %s)\n", i, err)
 			break
 		}
 		res = append(res, u)
