@@ -110,9 +110,9 @@ func main() {
 
 	// we are brutal - if we startup we slay all deployment users
 	slayAll()
-	sd := server.ServerDef{
-		Port: *port,
-	}
+	sd := server.NewServerDef()
+	sd.Port = *port
+
 	sd.Register = st
 	err := server.ServerStartup(sd)
 	if err != nil {

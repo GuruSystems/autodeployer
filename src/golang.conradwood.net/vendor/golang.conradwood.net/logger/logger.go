@@ -20,10 +20,11 @@ type AsyncLogQueue struct {
 
 func NewAsyncLogQueue() (*AsyncLogQueue, error) {
 	alq := &AsyncLogQueue{}
-	t := time.NewTimer(2 * time.Second)
+	t := time.NewTicker(2 * time.Second)
 	go func(a *AsyncLogQueue) {
-		<-t.C
-		a.Flush()
+		for _ = range t.C {
+			a.Flush()
+		}
 	}(alq)
 	return alq, nil
 }
@@ -40,7 +41,7 @@ func (alq *AsyncLogQueue) Flush() error {
 	var lasterr error
 	alq.lock.Lock()
 	defer alq.lock.Unlock()
-	fmt.Printf("Sending %d log entries\n", len(alq.entries))
+	// fmt.Printf("Sending %d log entries\n", len(alq.entries))
 	if len(alq.entries) == 0 {
 		// save ourselves from dialing and stuff
 		return nil
