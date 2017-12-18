@@ -20,6 +20,7 @@ import (
 	"flag"
 	pb "golang.conradwood.net/autodeployer/proto"
 	lpb "golang.conradwood.net/logservice/proto"
+	rpb "golang.conradwood.net/registrar/proto"
 	"golang.conradwood.net/server"
 	"golang.org/x/net/context"
 	"io"
@@ -47,29 +48,30 @@ var (
 // information about a currently deployed application
 type Deployed struct {
 	// if true, then there is no application currently deployed for this user
-	idle         bool
-	startupMsg   string
-	binary       string
-	status       pb.DeploymentStatus
-	ports        []int
-	user         *user.User
-	cmd          *exec.Cmd
-	namespace    string
-	groupname    string
-	repo         string
-	build        uint64
-	exitCode     error
-	url          string
-	args         []string
-	workingDir   string
-	Stdout       io.Reader
-	started      time.Time
-	finished     time.Time
-	lastLine     string
-	downloadUser string
-	downloadPW   string
-	deploymentID string
-	logger       *logger.AsyncLogQueue
+	idle             bool
+	startupMsg       string
+	binary           string
+	status           pb.DeploymentStatus
+	ports            []int
+	user             *user.User
+	cmd              *exec.Cmd
+	namespace        string
+	groupname        string
+	repo             string
+	build            uint64
+	exitCode         error
+	url              string
+	args             []string
+	workingDir       string
+	Stdout           io.Reader
+	started          time.Time
+	finished         time.Time
+	lastLine         string
+	downloadUser     string
+	downloadPW       string
+	deploymentID     string
+	logger           *logger.AsyncLogQueue
+	autoRegistration []*pb.AutoRegistration
 }
 
 // callback from the compound initialisation
@@ -171,6 +173,12 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	if cr.Repository == "" {
 		return nil, errors.New("Repositoryname is required")
 	}
+	for _, ar := range cr.AutoRegistration {
+		_, err := convStringToApitypes(ar.ApiTypes)
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("Failed to convert apitypes for %v: %s", ar, err))
+		}
+	}
 	fmt.Printf("Deploying %s, Build %d\n", cr.Repository, cr.BuildID)
 	users := getListOfUsers()
 	du := allocUser(users)
@@ -184,6 +192,7 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	du.deploymentID = cr.DeploymentID
 	du.namespace = cr.Namespace
 	du.groupname = cr.Groupname
+	du.autoRegistration = cr.AutoRegistration
 	_, wd := filepath.Split(du.user.HomeDir)
 	wd = fmt.Sprintf("/srv/autodeployer/deployments/%s", wd)
 	fmt.Printf("Deploying \"%s\" as user \"%s\" in %s\n", cr.Repository, du.user.Username, wd)
@@ -317,14 +326,18 @@ func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupReques
 	return sr, nil
 }
 
+// triggered by the unprivileged startup code
 func (s *AutoDeployer) Started(ctx context.Context, cr *pb.StartedRequest) (*pb.EmptyResponse, error) {
-	d := entryByMsg(cr.Msgid)
-	if d == nil {
+	du := entryByMsg(cr.Msgid)
+	if du == nil {
 		return nil, errors.New("No such deployment")
 	}
-	d.status = pb.DeploymentStatus_EXECUSER
+	du.status = pb.DeploymentStatus_EXECUSER
+	du.StartupCodeExec()
 	return &pb.EmptyResponse{}, nil
 }
+
+// triggered by the unprivileged startup code
 func (s *AutoDeployer) Terminated(ctx context.Context, cr *pb.TerminationRequest) (*pb.EmptyResponse, error) {
 	d := entryByMsg(cr.Msgid)
 	if d == nil {
@@ -379,31 +392,19 @@ func waitForCommand(du *Deployed) {
 		}
 	}
 	err := du.cmd.Wait()
-	du.finished = time.Now()
-	du.status = pb.DeploymentStatus_TERMINATED
-	if du.exitCode == nil {
-		du.exitCode = err
-	}
-	if du.exitCode != nil {
-		fmt.Printf("Failed: %s (%s)\n", du.toString(), du.exitCode)
-	} else {
-		fmt.Printf("Exited normally: %s\n", du.toString())
-	}
 
-	Slay(du.user.Username)
-	if du.logger != nil {
-		du.logger.Flush()
-	}
+	// here we end up when our command terminates. it's still the privileged
+	// server
+	du.StartupCodeFinished(err)
+
 }
 func Slay(username string) {
 	// we clean up - to make sure we really really release resources, we "slay" the user
 	cmd := exec.Command("/usr/sbin/slay", "-clean", username)
-	fmt.Printf("Slaying process of user %s\n", username)
+	//fmt.Printf("Slaying process of user %s\n", username)
 	err := cmd.Run()
 	if err != nil {
-		fmt.Printf("Slay failed: %s\n", err)
-	} else {
-		fmt.Printf("Slay %s done\n", username)
+		fmt.Printf("Slay user %s failed: %s\n", username, err)
 	}
 }
 
@@ -613,4 +614,68 @@ func getListOfUsers() []*user.User {
 
 func (d *Deployed) toString() string {
 	return fmt.Sprintf("%s-%d (%s) %s", d.repo, d.build, d.startupMsg, d.status)
+}
+
+// called by the main thread, once the startup code claims it handed control
+// to the program
+func (du *Deployed) StartupCodeExec() {
+	// auto register stuff
+	for _, ar := range du.autoRegistration {
+		port := du.getPortByName(ar.Portdef)
+		if port == 0 {
+			fmt.Printf("Broken autoregistration (%v) - no portdef", ar)
+			continue
+		}
+		apiTypes, err := convStringToApitypes(ar.ApiTypes)
+		if err != nil {
+			fmt.Printf("Broken autoregistration (%v) - api error %s", ar, err)
+			continue
+		}
+		for _, at := range apiTypes {
+			if at == rpb.Apitype_tcp {
+				sd := server.NewTCPServerDef(ar.ServiceName)
+				sd.Port = port
+				server.AddRegistry(sd)
+			} else if at == rpb.Apitype_html {
+				sd := server.NewHTMLServerDef(ar.ServiceName)
+				sd.Port = port
+				server.AddRegistry(sd)
+			} else {
+				fmt.Printf("Cannot (yet) auto-register apitype: %s\n", at)
+				continue
+			}
+
+		}
+	}
+}
+
+// called by the main thread (privileged) when our forked startup.go finished
+func (du *Deployed) StartupCodeFinished(exitCode error) {
+	// unregister the ports...
+	err := server.UnregisterPortRegistry(du.ports)
+	if err != nil {
+		fmt.Printf("Failed to unregister port %s\n", err)
+	}
+	du.finished = time.Now()
+	du.status = pb.DeploymentStatus_TERMINATED
+	if du.exitCode == nil {
+		du.exitCode = exitCode
+	}
+	if du.exitCode != nil {
+		fmt.Printf("Failed: %s (%s)\n", du.toString(), du.exitCode)
+	} else {
+		fmt.Printf("Exited normally: %s\n", du.toString())
+	}
+
+	Slay(du.user.Username)
+
+	if du.logger != nil {
+		du.logger.Flush()
+	}
+}
+func (du *Deployed) getPortByName(name string) int {
+	return 0
+}
+func convStringToApitypes(apitypestring string) ([]rpb.Apitype, error) {
+	return nil, nil
 }
