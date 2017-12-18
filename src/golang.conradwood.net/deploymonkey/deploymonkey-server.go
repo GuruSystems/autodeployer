@@ -372,7 +372,7 @@ func loadAutoReg(id int) ([]*apb.AutoRegistration, error) {
 		ar := &apb.AutoRegistration{}
 		err = rows.Scan(&ar.Portdef, ar.ServiceName, ar.ApiTypes)
 		if err != nil {
-			s := fmt.Sprintf("Failed to get tag for app %d:%s\n", id, err)
+			s := fmt.Sprintf("Failed to get autoreg for app %d:%s\n", id, err)
 			return nil, errors.New(s)
 		}
 		res = append(res, ar)
