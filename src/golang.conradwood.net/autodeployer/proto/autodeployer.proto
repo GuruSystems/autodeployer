@@ -6,7 +6,7 @@ package autodeployer;
 import "google/api/annotations.proto";
 
 message AutoRegistration {
- string portdef=1;
+ string Portdef=1;
  string ServiceName=2;
  // comma delimited list of apitypes
  string ApiTypes=3;

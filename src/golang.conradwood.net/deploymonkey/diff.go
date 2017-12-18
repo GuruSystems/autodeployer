@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	apb "golang.conradwood.net/autodeployer/proto"
 	pb "golang.conradwood.net/deploymonkey/proto"
 )
 
@@ -131,6 +132,30 @@ func doesExistInDef(ad *pb.ApplicationDefinition, ads []*pb.ApplicationDefinitio
 	return false
 }
 
+// returns true if both registration arrays are identical
+func IsAutoRegistrationIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
+	for _, x := range ad1.AutoRegs {
+		if !doesAutoRegExist(x, ad2) {
+			return false
+		}
+	}
+	for _, x := range ad2.AutoRegs {
+		if !doesAutoRegExist(x, ad1) {
+			return false
+		}
+	}
+	return true
+}
+
+func doesAutoRegExist(a *apb.AutoRegistration, ad *pb.ApplicationDefinition) bool {
+	for _, x := range ad.AutoRegs {
+		if (x.Portdef == a.Portdef) && (x.ServiceName == a.ServiceName) && (x.ApiTypes == a.ApiTypes) {
+			return true
+		}
+	}
+	return false
+}
+
 // returns true if both arg arrays are identical
 func AreArgsIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
 	// check args
@@ -154,6 +179,9 @@ func IsIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
 		return false
 	}
 	if !AreArgsIdentical(ad1, ad2) {
+		return false
+	}
+	if !IsAutoRegistrationIdentical(ad1, ad2) {
 		return false
 	}
 

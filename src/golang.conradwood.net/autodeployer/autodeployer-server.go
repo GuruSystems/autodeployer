@@ -690,6 +690,7 @@ func (d *Deployed) toString() string {
 // to the program
 func (du *Deployed) StartupCodeExec() {
 	// auto register stuff
+	fmt.Printf("Got %d autoregistration services to take care of\n", len(du.autoRegistration))
 	for _, ar := range du.autoRegistration {
 		port := du.getPortByName(ar.Portdef)
 		if port == 0 {

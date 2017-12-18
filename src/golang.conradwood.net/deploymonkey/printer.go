@@ -20,6 +20,7 @@ func PrintGroup(x *pb.GroupDefinitionRequest) {
 			b.WriteString(fmt.Sprintf("%s ", arg))
 		}
 		b.WriteString("%\n")
+		b.WriteString(fmt.Sprintf("           %d autoregs:\n", len(a.AutoRegs)))
 		for _, autoreg := range a.AutoRegs {
 			b.WriteString(fmt.Sprintf("           Autoregistration: "))
 			b.WriteString(fmt.Sprintf("%s ", autoreg))

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	apb "golang.conradwood.net/autodeployer/proto"
 	pb "golang.conradwood.net/deploymonkey/proto"
 	"golang.conradwood.net/server"
 	"golang.org/x/net/context"
@@ -330,10 +331,16 @@ func loadApp(row *sql.Rows) (*pb.ApplicationDefinition, error) {
 		return nil, err
 	}
 	res.Args = args
+
+	regs, err := loadAutoReg(id)
+	if err != nil {
+		return nil, err
+	}
+	res.AutoRegs = regs
 	return &res, nil
 }
 
-// turns a database row into an applicationdefinition object
+// given an application, it loads the args from DB
 func loadAppArgs(id int) ([]string, error) {
 	var res []string
 	var s string
@@ -349,6 +356,26 @@ func loadAppArgs(id int) ([]string, error) {
 			return nil, errors.New(s)
 		}
 		res = append(res, s)
+	}
+	return res, nil
+}
+
+// given an applicationid, it loads the args from DB
+func loadAutoReg(id int) ([]*apb.AutoRegistration, error) {
+	var res []*apb.AutoRegistration
+	rows, err := dbcon.Query("SELECT portdef,servicename,apitypes from autoreg where app_id = $1", id)
+	if err != nil {
+		s := fmt.Sprintf("Failed to get autoregs for app %d:%s\n", id, err)
+		return nil, errors.New(s)
+	}
+	for rows.Next() {
+		ar := &apb.AutoRegistration{}
+		err = rows.Scan(&ar.Portdef, ar.ServiceName, ar.ApiTypes)
+		if err != nil {
+			s := fmt.Sprintf("Failed to get tag for app %d:%s\n", id, err)
+			return nil, errors.New(s)
+		}
+		res = append(res, ar)
 	}
 	return res, nil
 }
