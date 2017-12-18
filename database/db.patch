@@ -25,5 +25,4 @@ CREATE TABLE args ( id integer PRIMARY KEY DEFAULT nextval('args_serial'), argum
 
 CREATE SEQUENCE autoreg_serial
 
-CREATE TABLE autoreg ( id integer PRIMARY KEY DEFAULT nextval('autoreg_serial'), portdef varchar(100) NOT NULL, servicename varchar(100) NOT NULL, apitypes varchar(100) NOT NULL )
-ALTER TABLE autoreg add column app_id integer NOT NULL references appdef(id) 
+CREATE TABLE autoreg ( id integer PRIMARY KEY DEFAULT nextval('autoreg_serial'), portdef varchar(100) NOT NULL, servicename varchar(100) NOT NULL, apitypes varchar(100) NOT NULL ,app_id integer NOT NULL references appdef(id) )
