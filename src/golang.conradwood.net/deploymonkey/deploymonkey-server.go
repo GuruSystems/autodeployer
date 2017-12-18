@@ -276,6 +276,12 @@ func saveApp(app *pb.ApplicationDefinition) (string, error) {
 			return "", errors.New(fmt.Sprintf("Failed to insert tag for app %d: %s", id, err))
 		}
 	}
+	for _, ar := range app.AutoRegs {
+		_, err = dbcon.Exec("INSERT INTO autoreg (portdef,servicename,apitypes,app_id) values ($1,$2,$3,$4)", ar.Portdef, ar.ServiceName, ar.ApiTypes, id)
+		if err != nil {
+			return "", errors.New(fmt.Sprintf("Failed to insert autoreg for app %d: %s", id, err))
+		}
+	}
 	return fmt.Sprintf("%d", id), nil
 }
 
