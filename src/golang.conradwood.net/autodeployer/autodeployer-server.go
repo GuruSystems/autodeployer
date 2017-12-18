@@ -702,6 +702,7 @@ func (du *Deployed) StartupCodeExec() {
 			continue
 		}
 		for _, at := range apiTypes {
+			fmt.Printf("Autoregistering %s on port %d, type=%v\n", ar.ServiceName, port, at)
 			if at == rpb.Apitype_tcp {
 				sd := server.NewTCPServerDef(ar.ServiceName)
 				sd.Port = port
