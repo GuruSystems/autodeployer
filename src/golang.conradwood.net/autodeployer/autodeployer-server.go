@@ -256,6 +256,12 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	du.namespace = cr.Namespace
 	du.groupname = cr.Groupname
 	du.autoRegistration = cr.AutoRegistration
+	du.downloadUser = cr.DownloadUser
+	du.downloadPW = cr.DownloadPassword
+	du.args = cr.Args
+	du.url = cr.DownloadURL
+	du.binary = cr.Binary
+
 	_, wd := filepath.Split(du.user.HomeDir)
 	wd = fmt.Sprintf("/srv/autodeployer/deployments/%s", wd)
 	fmt.Printf("Deploying \"%s\" as user \"%s\" in %s\n", cr.Repository, du.user.Username, wd)
@@ -280,13 +286,9 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	fmt.Printf("Executing: %v\n", cmd)
 	// fill our deploystatus with stuff
 	// copy deployment request to deployment descriptor
-	du.downloadUser = cr.DownloadUser
-	du.downloadPW = cr.DownloadPassword
+
 	du.cmd = cmd
 	du.workingDir = wd
-	du.args = cr.Args
-	du.url = cr.DownloadURL
-	du.binary = cr.Binary
 
 	du.status = pb.DeploymentStatus_STARTING
 	du.Stdout, err = du.cmd.StdoutPipe()

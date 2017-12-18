@@ -122,7 +122,7 @@ func replaceVars(text string, vars map[string]string) string {
 }
 
 func deployOn(sa *rpb.ServiceAddress, group *DBGroup, app *pb.ApplicationDefinition) error {
-	fmt.Printf("Deploying %v on %v\n", app, sa)
+	fmt.Printf("Deploying %v on %s\n", app, sa.Host)
 	conn, err := client.DialService(sa)
 	if err != nil {
 		fmt.Printf("Failed to connect to service %v", sa)
@@ -159,7 +159,7 @@ func deployOn(sa *rpb.ServiceAddress, group *DBGroup, app *pb.ApplicationDefinit
 		fmt.Println(s)
 		return errors.New(s)
 	}
-	fmt.Printf("Successfully deployed %v on %v", app, sa)
+	fmt.Printf("Successfully deployed %v on %s", app, sa.Host)
 	return nil
 
 }
