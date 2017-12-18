@@ -27,6 +27,7 @@ var (
 	dbpw          = flag.String("dbpw", "pw", "password for the database to use for authentication")
 	file          = flag.String("filename", "", "filename with a group definition (for testing)")
 	applyonly     = flag.Bool("apply_only", false, "if true will apply current config and exit")
+	testmode      = flag.Bool("testmode", false, "sets some stuff to make it more convenient to test")
 	applyinterval = flag.Int("apply_interval", 60, "`seconds` between scans for discrepancies and re-applying them")
 	dbcon         *sql.DB
 	dbinfo        string
@@ -42,6 +43,7 @@ func st(server *grpc.Server) error {
 }
 
 func main() {
+	var err error
 	flag.Parse() // parse stuff. see "var" section above
 	if *file != "" {
 		importFile(*file)
@@ -50,12 +52,11 @@ func main() {
 		}
 		os.Exit(0)
 	}
-	sd := server.NewServerDef()
-	sd.Port = *port
-
-	err := applyAllVersions(false)
-	if err != nil {
-		fmt.Printf("Failed to apply all versions: %s\n", err)
+	if !*testmode {
+		err := applyAllVersions(false)
+		if err != nil {
+			fmt.Printf("Failed to apply all versions: %s\n", err)
+		}
 	}
 	if *applyonly {
 		if err == nil {
@@ -63,11 +64,15 @@ func main() {
 		}
 		os.Exit(10)
 	}
-	applyTimer := time.NewTimer(time.Second * time.Duration(*applyinterval))
-	go func() {
-		<-applyTimer.C
-		applyAllVersions(true)
-	}()
+	if !*testmode {
+		applyTimer := time.NewTimer(time.Second * time.Duration(*applyinterval))
+		go func() {
+			<-applyTimer.C
+			applyAllVersions(true)
+		}()
+	}
+	sd := server.NewServerDef()
+	sd.Port = *port
 	sd.Register = st
 	err = server.ServerStartup(sd)
 	if err != nil {
@@ -307,6 +312,9 @@ func getGroupLatestVersion(namespace string, groupname string) (int, error) {
 // given a group version will load all its apps into objects
 func loadAppGroupVersion(version int) ([]*pb.ApplicationDefinition, error) {
 	var res []*pb.ApplicationDefinition
+	if *testmode {
+		fmt.Printf("Loading appgroup version #%d\n", version)
+	}
 	rows, err := dbcon.Query("SELECT appdef.id,sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances from appdef, lnk_app_grp where appdef.id = lnk_app_grp.app_id and lnk_app_grp.group_version_id = $1", version)
 	if err != nil {
 		fmt.Printf("Failed to get apps for version %d:%s\n", version, err)
@@ -369,6 +377,9 @@ func loadAppArgs(id int) ([]string, error) {
 // given an applicationid, it loads the args from DB
 func loadAutoReg(id int) ([]*apb.AutoRegistration, error) {
 	var res []*apb.AutoRegistration
+	if *testmode {
+		fmt.Printf("Loading auto registration for app_id %d\n", id)
+	}
 	rows, err := dbcon.Query("SELECT portdef,servicename,apitypes from autoreg where app_id = $1", id)
 	if err != nil {
 		s := fmt.Sprintf("Failed to get autoregs for app %d:%s\n", id, err)

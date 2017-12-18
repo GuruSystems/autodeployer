@@ -23,6 +23,7 @@ var (
 	dbdb   = flag.String("database", "logservice", "database to use for authentication")
 	dbuser = flag.String("dbuser", "root", "username for the database to use for authentication")
 	dbpw   = flag.String("dbpw", "pw", "password for the database to use for authentication")
+	debug  = flag.Bool("debug", false, "turn debug output on - DANGEROUS DO NOT USE IN PRODUCTION!")
 
 	dbcon *sql.DB
 )
@@ -121,35 +122,59 @@ func (s *LogService) LogCommandStdout(ctx context.Context, lr *pb.LogRequest) (*
 ***************************************************************************************/
 func (s *LogService) GetLogCommandStdout(ctx context.Context, lr *pb.GetLogRequest) (*pb.GetLogResponse, error) {
 	var err error
-	// for now we ignore all filters because we're stupid
-	// if we add this we have to be supercalifragilisticexpialidocious careful
-	// about escaping the strings properly ;(
-	// at least check if someone implemented this:
-	// https://github.com/golang/go/issues/18478
 
-	if len(lr.LogFilter) != 0 {
-		return nil, errors.New("Sorry, but filtering is not yet implemented in GetLogCommandStdout")
-	}
 	// but do take care of the minid
 	minid := lr.MinimumLogID
 	//fmt.Printf("Get log from minimum id: %d\n", minid)
 	where := ""
+	limit := int64(1000)
 	if minid > 0 {
-		where = fmt.Sprintf("WHERE id > %d", minid)
+		where = fmt.Sprintf("WHERE (id > %d)", minid)
 	} else if minid < 0 {
-		var maxid int64
-		err = dbcon.QueryRow("select MAX(ID) as maxi from logentry").Scan(&maxid)
-		if err != nil {
-			return nil, err
-		}
-		minid = maxid + minid
-		if minid < 0 {
-			minid = 0
-		}
-		where = fmt.Sprintf("WHERE id > %d", minid)
-		//fmt.Printf("Using whereclause: \"%s\"\n", where)
+		limit = 0 - minid
+		where = "WHERE (id > 0)"
 	}
-	sqlstring := fmt.Sprintf("SELECT id,loguser,peerhost,occured,status,appname,repository,namespace,groupname,deployment_id,startup_id,line from logentry %s order by id asc limit 1000", where)
+	// where clause for ID has been set, so we only append with AND statements to filter further
+
+	for _, lf := range lr.LogFilter {
+		if lf.Host != "" {
+			return nil, errors.New("Cannot yet filter on host")
+		}
+		if lf.UserName != "" {
+			return nil, errors.New("Cannot yet filter on userName")
+		}
+		if lf.AppDef == nil {
+			return nil, errors.New("Cannot yet filter with empty appdef")
+		}
+		ad := lf.AppDef
+		if ad.Status != "" {
+			return nil, errors.New("Cannot yet filter on app status")
+		}
+		if ad.DeploymentID != "" {
+			return nil, errors.New("Cannot yet filter on app deploymentid")
+		}
+		if ad.StartupID != "" {
+			return nil, errors.New("Cannot yet filter on app startupid")
+		}
+
+		if ad.Appname != "" {
+			where = fmt.Sprintf("%s AND (appname = '%s')", where, ad.Appname)
+		}
+		if ad.Repository != "" {
+			where = fmt.Sprintf("%s AND (repository = '%s')", where, ad.Repository)
+		}
+		if ad.Groupname != "" {
+			where = fmt.Sprintf("%s AND (groupname = '%s')", where, ad.Groupname)
+		}
+		if ad.Namespace != "" {
+			where = fmt.Sprintf("%s AND (namespace = '%s')", where, ad.Namespace)
+		}
+
+	}
+	sqlstring := fmt.Sprintf("SELECT id,loguser,peerhost,occured,status,appname,repository,namespace,groupname,deployment_id,startup_id,line from logentry %s order by id desc limit %d", where, limit)
+	if *debug {
+		fmt.Printf("Select: \"%s\"\n", sqlstring)
+	}
 	rows, err := dbcon.Query(sqlstring)
 	defer rows.Close()
 	if err != nil {
@@ -175,7 +200,8 @@ func (s *LogService) GetLogCommandStdout(ctx context.Context, lr *pb.GetLogReque
 		if err != nil {
 			return nil, err
 		}
-		response.Entries = append(response.Entries, &le)
+		// since we're ordering by DESC, insert reverse order
+		response.Entries = append([]*pb.LogEntry{&le}, response.Entries...)
 	}
 	//fmt.Printf("Returing %d log entries\n", i)
 	return &response, nil

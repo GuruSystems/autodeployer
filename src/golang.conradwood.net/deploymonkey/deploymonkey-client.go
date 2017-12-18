@@ -103,7 +103,7 @@ func listConfig() {
 			bail(err, "Failed to get applications")
 			fmt.Printf("      %s (%d applications)\n", gs, len(gapps.Applications))
 			for _, app := range gapps.Applications {
-				fmt.Printf("           %dx Repo=%s, Binary=%s, BuildID=#%d\n", app.Instances, app.Repository, app.Binary, app.BuildID)
+				fmt.Printf("           %dx Repo=%s, Binary=%s, BuildID=#%d, %d autoregistrations\n", app.Instances, app.Repository, app.Binary, app.BuildID, len(app.AutoRegs))
 			}
 		}
 	}
