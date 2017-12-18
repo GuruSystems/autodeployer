@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package deploymonkey;
 
+import "golang.conradwood.net/autodeployer/proto/autodeployer.proto";
 import "google/api/annotations.proto";
 
 // the normal, intended flow is like so:
@@ -21,6 +22,7 @@ message ApplicationDefinition {
  uint64 BuildID=7;
  uint32 Instances=8;
  string DeploymentID=9;
+ repeated autodeployer.AutoRegistration AutoRegs=10; 
 }
 
 // a group consists of one or more applications

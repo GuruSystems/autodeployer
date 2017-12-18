@@ -5,6 +5,13 @@ package autodeployer;
 
 import "google/api/annotations.proto";
 
+message AutoRegistration {
+ string portdef=1;
+ string ServiceName=2;
+ // comma delimited list of apitypes
+ string ApiTypes=3;
+}
+
 message DeployRequest {
  string DownloadURL=1;
  string DownloadUser=2;
@@ -17,6 +24,7 @@ message DeployRequest {
  string DeploymentID=8;
  string Namespace=9;
  string Groupname=10;
+ repeated AutoRegistration AutoRegistration=11;
 }
 enum DeploymentStatus {
 // nothing happened yet
