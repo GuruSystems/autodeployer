@@ -97,6 +97,11 @@ bool Block=2;
 }
 message UndeployResponse{}
 
+message MachineInfoRequest{}
+message MachineInfoResponse {
+string MachineGroup=1;
+}
+
 service AutoDeployer {
 // deploy an application
 rpc Deploy(DeployRequest) returns (DeployResponse);
@@ -109,4 +114,7 @@ rpc Terminated(TerminationRequest) returns (EmptyResponse);
 rpc Started(StartedRequest) returns (EmptyResponse);
 // what's running??
 rpc GetDeployments(InfoRequest) returns (InfoResponse);
+// what kind of machine are we running on?
+// name/speed/ram/bla
+rpc GetMachineInfo(MachineInfoRequest) returns (MachineInfoResponse);
 }

@@ -43,6 +43,7 @@ var (
 	portLock     = new(sync.Mutex)
 	idleReaper   = flag.Int("reclaim", 5, "Reclaim terminated user accounts after `seconds`")
 	startTimeout = flag.Int("start_timeout", 5, "timeout a deployment after `seconds`")
+	machineGroup = flag.String("machinegroup", "worker", "the group a specific machine is in")
 )
 
 // information about a currently deployed application
@@ -469,6 +470,13 @@ func (s *AutoDeployer) GetDeployments(ctx context.Context, cr *pb.InfoRequest) (
 		dr.Args = d.args
 		da := pb.DeployedApp{Deployment: &dr, ID: d.startupMsg}
 		res.Apps = append(res.Apps, &da)
+	}
+	return &res, nil
+}
+
+func (s *AutoDeployer) GetMachineInfo(ctx context.Context, cr *pb.MachineInfoRequest) (*pb.MachineInfoResponse, error) {
+	res := pb.MachineInfoResponse{
+		MachineGroup: *machineGroup,
 	}
 	return &res, nil
 }
