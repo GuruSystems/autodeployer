@@ -44,6 +44,7 @@ var (
 	idleReaper   = flag.Int("reclaim", 5, "Reclaim terminated user accounts after `seconds`")
 	startTimeout = flag.Int("start_timeout", 5, "timeout a deployment after `seconds`")
 	machineGroup = flag.String("machinegroup", "worker", "the group a specific machine is in")
+	testfile     = flag.String("cfgfile", "", "config file (for testing)")
 )
 
 // information about a currently deployed application
@@ -75,6 +76,13 @@ type Deployed struct {
 	autoRegistration []*pb.AutoRegistration
 }
 
+func isTestMode() bool {
+	if *testfile != "" {
+		return true
+	}
+	return false
+}
+
 // callback from the compound initialisation
 func st(server *grpc.Server) error {
 	s := new(AutoDeployer)
@@ -90,6 +98,7 @@ func stopping() {
 	os.Exit(0)
 }
 func main() {
+	flag.Parse() // parse stuff. see "var" section above
 	// catch ctrl-c (for system shutdown)
 	// and signal child processes
 	c := make(chan os.Signal, 2)
@@ -101,7 +110,6 @@ func main() {
 	}()
 	defer stopping()
 
-	flag.Parse() // parse stuff. see "var" section above
 	if *msgid != "" {
 		Execute()
 		os.Exit(10) // should never happen
@@ -109,10 +117,16 @@ func main() {
 	if *test {
 		// testing
 		go testing()
+		return
 	}
 
 	// we are brutal - if we startup we slay all deployment users
 	slayAll()
+	if *testfile != "" {
+		go ApplyTestFile()
+		fmt.Printf("Apply testfile: done\n")
+	}
+
 	sd := server.NewServerDef()
 	sd.Port = *port
 	sd.Register = st
@@ -127,6 +141,10 @@ func main() {
 
 //*********************************************************************
 func slayAll() {
+	if isTestMode() {
+		fmt.Printf("Not slaying - testmode activated\n")
+		return
+	}
 	users := getListOfUsers()
 	var wg sync.WaitGroup
 	for _, un := range users {
@@ -158,6 +176,50 @@ func testing() {
 	fmt.Printf("Deployed %v.\n", dr)
 	fmt.Printf("Waiting forever...(testing a daemon)\n")
 	select {}
+}
+
+/**********************************
+* implementing test functions here
+***********************************/
+func ApplyTestFile() {
+	time.Sleep(2 * time.Second)
+	fmt.Printf("Applying testfile: %s\n", *testfile)
+	gd, err := ParseFile(*testfile)
+	if err != nil {
+		fmt.Printf("failed to parse file %s: %s\n", *testfile, err)
+		return
+	}
+
+	ad := new(AutoDeployer)
+
+	for _, x := range gd.Groups {
+		if x.Namespace == "" {
+			x.Namespace = gd.Namespace
+		}
+	}
+	for _, g := range gd.Groups {
+		for _, app := range g.Applications {
+			fmt.Printf("Deploying application %s from %s with %d autoregistration ports\n", app.Binary, app.DownloadURL, len(app.AutoRegs))
+			dp := pb.DeployRequest{
+				DownloadURL:      app.DownloadURL,
+				DownloadUser:     app.DownloadUser,
+				DownloadPassword: app.DownloadPassword,
+				Binary:           app.Binary,
+				Args:             []string{"-port=${PORT1}", "-http_port=${PORT2}"},
+				Repository:       app.Repository,
+				BuildID:          app.BuildID,
+				DeploymentID:     "testdeplid",
+				Namespace:        "namespace",
+				Groupname:        "groupname",
+				AutoRegistration: app.AutoRegs,
+			}
+			_, err := ad.Deploy(nil, &dp)
+			if err != nil {
+				fmt.Printf("Deployment error: %s\n", err)
+				return
+			}
+		}
+	}
 }
 
 /**********************************
@@ -200,7 +262,7 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	uid, _ := strconv.Atoi(du.user.Uid)
 	gid, _ := strconv.Atoi(du.user.Gid)
 	err := createWorkingDirectory(wd, uid, gid)
-	if err != nil {
+	if err != nil && (!isTestMode()) {
 		du.status = pb.DeploymentStatus_TERMINATED
 		du.exitCode = err
 		fmt.Printf("Failed to create working directory %s: %s\n", wd, err)
@@ -631,12 +693,12 @@ func (du *Deployed) StartupCodeExec() {
 	for _, ar := range du.autoRegistration {
 		port := du.getPortByName(ar.Portdef)
 		if port == 0 {
-			fmt.Printf("Broken autoregistration (%v) - no portdef", ar)
+			fmt.Printf("Broken autoregistration (%v) - no portdef\n", ar)
 			continue
 		}
 		apiTypes, err := convStringToApitypes(ar.ApiTypes)
 		if err != nil {
-			fmt.Printf("Broken autoregistration (%v) - api error %s", ar, err)
+			fmt.Printf("Broken autoregistration (%v) - api error %s\n", ar, err)
 			continue
 		}
 		for _, at := range apiTypes {
@@ -682,8 +744,37 @@ func (du *Deployed) StartupCodeFinished(exitCode error) {
 	}
 }
 func (du *Deployed) getPortByName(name string) int {
-	return 0
+	if !strings.HasPrefix(name, "${PORT") {
+		fmt.Printf("Invalid port name: %s\n", name)
+		return 0
+	}
+	psn := name[6 : len(name)-1]
+	pn, err := strconv.Atoi(psn)
+	if err != nil {
+		fmt.Printf("Could not convert port by name %s to portnumber: %s\n", name, err)
+		return 0
+	}
+	if pn >= len(du.ports) {
+		fmt.Printf("Port %d not allocated (%d)\n", pn, len(du.ports))
+		return 0
+	}
+	po := du.ports[pn]
+	fmt.Printf("Port %s == %d\n", psn, po)
+	return po
 }
 func convStringToApitypes(apitypestring string) ([]rpb.Apitype, error) {
-	return nil, nil
+	var res []rpb.Apitype
+	asa := strings.Split(apitypestring, ",")
+	for _, as := range asa {
+		as = strings.TrimLeft(as, " ")
+		as = strings.TrimRight(as, " ")
+		fmt.Printf("Converting: \"%s\"\n", as)
+		v, ok := rpb.Apitype_value[as]
+		if !ok {
+			return nil, errors.New(fmt.Sprintf("unknown apitype \"%s\"", as))
+		}
+		av := rpb.Apitype(v)
+		res = append(res, av)
+	}
+	return res, nil
 }

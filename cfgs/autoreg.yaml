@@ -12,6 +12,6 @@ groups:
           - arg2
         autoregs:
           - autoregistration: stuff
-            portdef: testportdef
+            portdef: ${PORT1}
             servicename: testservicename
-            apitypes: tcp
+            apitypes: tcp, status
