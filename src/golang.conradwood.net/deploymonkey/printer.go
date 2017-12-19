@@ -15,6 +15,7 @@ func PrintGroup(x *pb.GroupDefinitionRequest) {
 		fmt.Printf("           Repo  : %s\n", a.Repository)
 		fmt.Printf("           Binary: %s\n", a.Binary)
 		fmt.Printf("          BuildID: %d\n", a.BuildID)
+		fmt.Printf("         Machines: %s\n", a.Machines)
 		b.WriteString(fmt.Sprintf("           %d Args: ", len(a.Args)))
 		for _, arg := range a.Args {
 			b.WriteString(fmt.Sprintf("%s ", arg))
