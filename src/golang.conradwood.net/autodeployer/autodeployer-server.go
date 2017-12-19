@@ -756,8 +756,13 @@ func (du *Deployed) getPortByName(name string) int {
 	pn, err := strconv.Atoi(psn)
 	if err != nil {
 		fmt.Printf("Could not convert port by name %s to portnumber: %s\n", name, err)
+		return 00
+	}
+	if pn <= 0 {
+		fmt.Printf("Request for port %d (%s) is invalid\n", pn, name)
 		return 0
 	}
+	pn--
 	if pn >= len(du.ports) {
 		fmt.Printf("Port %d not allocated (%d)\n", pn, len(du.ports))
 		return 0
