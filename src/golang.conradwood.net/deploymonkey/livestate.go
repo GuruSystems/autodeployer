@@ -86,7 +86,17 @@ func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 	// starting stuff
 	// also, this should start them up multi-threaded... and bla
 	err = nil
-	workers := len(sas)
+	mgroup := "worker"
+	fsas, err := getDeployersInGroup(mgroup, sas)
+	if err != nil {
+		fmt.Printf("Could not get deployers for group %s: %s\n", mgroup, err)
+	}
+	if (fsas == nil) || (len(fsas) == 0) {
+		s := fmt.Sprintf("No deployers to deploy on for group %s (app=%v)", mgroup, ads)
+		fmt.Println(s)
+		return errors.New(s)
+	}
+	workers := len(fsas)
 	workeridx := 0
 	for _, app := range ads {
 		fmt.Printf("Starting %d instances of %s\n", app.Instances, app.Repository)
@@ -104,7 +114,7 @@ func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 			if workeridx >= workers {
 				workeridx = 0
 			}
-			terr := deployOn(sas[workeridx], group, app)
+			terr := deployOn(fsas[workeridx], group, app)
 			if terr == nil {
 				instances++
 				retries = 5
