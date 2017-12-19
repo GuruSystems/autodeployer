@@ -10,6 +10,8 @@ server:
 client:
 	go install autodeployer-client.go
 
+all: proto server client
+
 .PHONY: proto
 proto:
 	@echo compiling Go proto stubs

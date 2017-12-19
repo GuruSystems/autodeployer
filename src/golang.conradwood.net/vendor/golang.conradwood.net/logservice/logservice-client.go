@@ -13,7 +13,7 @@ import (
 // static variables for flag parser
 var (
 	log_status  = flag.String("status", "", "The status string to log")
-	app_name    = flag.String("app_name", "", "The name of the application to log or to filter on")
+	app_name    = flag.String("appname", "", "The name of the application to log or to filter on")
 	repo        = flag.String("repository", "", "The name of the repository to log")
 	groupname   = flag.String("groupname", "", "The name of the group to log or to filter on")
 	namespace   = flag.String("namespace", "", "the namespace to log or to filter on")

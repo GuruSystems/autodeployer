@@ -14,8 +14,9 @@ type QueueEntry struct {
 	logRequest *pb.LogRequest
 }
 type AsyncLogQueue struct {
-	lock    sync.Mutex
-	entries []*QueueEntry
+	lock           sync.Mutex
+	entries        []*QueueEntry
+	lastErrPrinted time.Time
 }
 
 func NewAsyncLogQueue() (*AsyncLogQueue, error) {
@@ -63,7 +64,10 @@ func (alq *AsyncLogQueue) Flush() error {
 			}
 			_, err := cl.LogCommandStdout(ctx, qe.logRequest)
 			if err != nil {
-				fmt.Printf("Failed to send log: %s\n", err)
+				if time.Since(alq.lastErrPrinted) > (10 * time.Second) {
+					fmt.Printf("Failed to send log: %s\n", err)
+					alq.lastErrPrinted = time.Now()
+				}
 				lasterr = err
 			} else {
 				qe.sent = true

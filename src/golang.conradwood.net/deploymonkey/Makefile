@@ -11,6 +11,8 @@ server:
 client:
 	go install deploymonkey-client.go parsefile.go printer.go
 
+all:	proto client server
+
 .PHONY: proto
 proto:
 	@echo compiling Go proto stubs
