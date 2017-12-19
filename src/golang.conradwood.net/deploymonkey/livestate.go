@@ -60,7 +60,7 @@ func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 
 	// stopping stuff...
 	for _, sa := range sas {
-		//fmt.Printf("Querying service at: %s:%d\n", sa.Host, sa.Port)
+		fmt.Printf("Querying service at: %s:%d\n", sa.Host, sa.Port)
 		conn, err := client.DialService(sa)
 		if err != nil {
 			fmt.Printf("Failed to connect to service %v", sa)
