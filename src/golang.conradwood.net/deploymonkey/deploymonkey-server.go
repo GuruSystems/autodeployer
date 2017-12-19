@@ -269,9 +269,9 @@ func saveApp(app *pb.ApplicationDefinition) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	err = dbcon.QueryRow("INSERT into appdef (sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances) values ($1,$2,$3,$4,$5,$6,$7) RETURNING id",
+	err = dbcon.QueryRow("INSERT into appdef (sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances,mgroup) values ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id",
 		app.DownloadURL, app.DownloadUser, app.DownloadPassword,
-		app.Binary, app.Repository, app.BuildID, app.Instances).Scan(&id)
+		app.Binary, app.Repository, app.BuildID, app.Instances, app.Machines).Scan(&id)
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("Failed to insert application: %s", err))
 	}
@@ -315,7 +315,7 @@ func loadAppGroupVersion(version int) ([]*pb.ApplicationDefinition, error) {
 	if *testmode {
 		fmt.Printf("Loading appgroup version #%d\n", version)
 	}
-	rows, err := dbcon.Query("SELECT appdef.id,sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances from appdef, lnk_app_grp where appdef.id = lnk_app_grp.app_id and lnk_app_grp.group_version_id = $1", version)
+	rows, err := dbcon.Query("SELECT appdef.id,sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances,mgroup from appdef, lnk_app_grp where appdef.id = lnk_app_grp.app_id and lnk_app_grp.group_version_id = $1", version)
 	if err != nil {
 		fmt.Printf("Failed to get apps for version %d:%s\n", version, err)
 		return nil, err
@@ -336,7 +336,7 @@ func loadApp(row *sql.Rows) (*pb.ApplicationDefinition, error) {
 	var id int
 	res := pb.ApplicationDefinition{}
 	err := row.Scan(&id, &res.DownloadURL, &res.DownloadUser, &res.DownloadPassword,
-		&res.Binary, &res.Repository, &res.BuildID, &res.Instances)
+		&res.Binary, &res.Repository, &res.BuildID, &res.Instances, &res.Machines)
 	if err != nil {
 		return nil, err
 	}

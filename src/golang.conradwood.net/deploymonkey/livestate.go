@@ -7,6 +7,10 @@ package main
 // we get our state by looking for all registered AutoDeployers in the registry
 // we then query each one to figure out what they currently have deployed
 
+// we should keep the dependency on other services to a minimum
+// afterall this is where we deploy them, so they might not be available
+// ATM we need registry, auth and autodeploy
+
 import (
 	"errors"
 	"fmt"
@@ -56,7 +60,7 @@ func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 
 	// stopping stuff...
 	for _, sa := range sas {
-		fmt.Printf("Querying service at: %s:%d\n", sa.Host, sa.Port)
+		//fmt.Printf("Querying service at: %s:%d\n", sa.Host, sa.Port)
 		conn, err := client.DialService(sa)
 		if err != nil {
 			fmt.Printf("Failed to connect to service %v", sa)
@@ -82,9 +86,20 @@ func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 	// starting stuff
 	// also, this should start them up multi-threaded... and bla
 	err = nil
-	workers := len(sas)
 	workeridx := 0
 	for _, app := range ads {
+		mgroup := app.Machines
+		fsas, err := getDeployersInGroup(mgroup, sas)
+		if err != nil {
+			fmt.Printf("Could not get deployers for group %s: %s\n", mgroup, err)
+		}
+		if (fsas == nil) || (len(fsas) == 0) {
+			s := fmt.Sprintf("No deployers to deploy on for group %s (app=%v)", mgroup, ads)
+			fmt.Println(s)
+			return errors.New(s)
+		}
+		workers := len(fsas)
+		fmt.Printf("Got %d hosts to deploy on\n", workers)
 		fmt.Printf("Starting %d instances of %s\n", app.Instances, app.Repository)
 		instances := 0
 
@@ -100,7 +115,7 @@ func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 			if workeridx >= workers {
 				workeridx = 0
 			}
-			terr := deployOn(sas[workeridx], group, app)
+			terr := deployOn(fsas[workeridx], group, app)
 			if terr == nil {
 				instances++
 				retries = 5
@@ -122,7 +137,8 @@ func replaceVars(text string, vars map[string]string) string {
 }
 
 func deployOn(sa *rpb.ServiceAddress, group *DBGroup, app *pb.ApplicationDefinition) error {
-	fmt.Printf("Deploying %v on %s (%d autoregistrations)\n", app, sa.Host, len(app.AutoRegs))
+	fmt.Printf("Deploying app on host %s:\n", sa.Host)
+	PrintApp(app)
 	conn, err := client.DialService(sa)
 	if err != nil {
 		fmt.Printf("Failed to connect to service %v", sa)
@@ -194,6 +210,43 @@ func getDeployments(adc ad.AutoDeployerClient, sa *rpb.ServiceAddress, deplid st
 			fmt.Printf("Deployment: %v\n", dr)
 		*/
 	}
+	return res, nil
+}
+
+// given a name will only return deployers in that group name
+// if name == "" it will be assumed to be "worker"
+func getDeployersInGroup(name string, all []*rpb.ServiceAddress) ([]*rpb.ServiceAddress, error) {
+	var res []*rpb.ServiceAddress
+
+	if name == "" {
+		name = "worker"
+	}
+	for _, sa := range all {
+		conn, err := client.DialService(sa)
+		if err != nil {
+			fmt.Printf("Failed to connect to service %v", sa)
+			continue
+		}
+		adc := ad.NewAutoDeployerClient(conn)
+		req := &ad.MachineInfoRequest{}
+		mir, err := adc.GetMachineInfo(ctx, req)
+		if err != nil {
+			conn.Close()
+			fmt.Printf("Failed to get machine info on %v\n", sa)
+			continue
+		}
+		conn.Close()
+		mg := mir.MachineGroup
+		if mg == "" {
+			mg = "worker"
+		}
+		fmt.Printf("Autodeployer on %s is in group %s (requested: %s)\n", sa.Host, mg, name)
+
+		if mg == name {
+			res = append(res, sa)
+		}
+	}
+
 	return res, nil
 }
 

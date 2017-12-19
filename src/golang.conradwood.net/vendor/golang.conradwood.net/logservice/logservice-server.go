@@ -23,7 +23,6 @@ var (
 	dbdb   = flag.String("database", "logservice", "database to use for authentication")
 	dbuser = flag.String("dbuser", "root", "username for the database to use for authentication")
 	dbpw   = flag.String("dbpw", "pw", "password for the database to use for authentication")
-	debug  = flag.Bool("debug", false, "turn debug output on - DANGEROUS DO NOT USE IN PRODUCTION!")
 
 	dbcon *sql.DB
 )
@@ -167,14 +166,11 @@ func (s *LogService) GetLogCommandStdout(ctx context.Context, lr *pb.GetLogReque
 			where = fmt.Sprintf("%s AND (groupname = '%s')", where, ad.Groupname)
 		}
 		if ad.Namespace != "" {
-			where = fmt.Sprintf("%s AND (namespace = '%s')", where, ad.Namespace)
+			where = fmt.Sprintf("%s AND (groupname = '%s')", where, ad.Namespace)
 		}
 
 	}
 	sqlstring := fmt.Sprintf("SELECT id,loguser,peerhost,occured,status,appname,repository,namespace,groupname,deployment_id,startup_id,line from logentry %s order by id desc limit %d", where, limit)
-	if *debug {
-		fmt.Printf("Select: \"%s\"\n", sqlstring)
-	}
 	rows, err := dbcon.Query(sqlstring)
 	defer rows.Close()
 	if err != nil {

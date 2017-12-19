@@ -22,7 +22,8 @@ message ApplicationDefinition {
  uint64 BuildID=7;
  uint32 Instances=8;
  string DeploymentID=9;
- repeated autodeployer.AutoRegistration AutoRegs=10; 
+ repeated autodeployer.AutoRegistration AutoRegs=10;
+ string Machines=11;
 }
 
 // a group consists of one or more applications
