@@ -7,6 +7,10 @@ package main
 // we get our state by looking for all registered AutoDeployers in the registry
 // we then query each one to figure out what they currently have deployed
 
+// we should keep the dependency on other services to a minimum
+// afterall this is where we deploy them, so they might not be available
+// ATM we need registry, auth and autodeploy
+
 import (
 	"errors"
 	"fmt"
@@ -194,6 +198,42 @@ func getDeployments(adc ad.AutoDeployerClient, sa *rpb.ServiceAddress, deplid st
 			fmt.Printf("Deployment: %v\n", dr)
 		*/
 	}
+	return res, nil
+}
+
+// given a name will only return deployers in that group name
+// if name == "" it will be assumed to be "worker"
+func getDeployersInGroup(name string, all []*rpb.ServiceAddress) ([]*rpb.ServiceAddress, error) {
+	var res []*rpb.ServiceAddress
+
+	if name == "" {
+		name = "worker"
+	}
+	for _, sa := range all {
+		fmt.Printf("Querying service at: %s:%d\n", sa.Host, sa.Port)
+		conn, err := client.DialService(sa)
+		if err != nil {
+			fmt.Printf("Failed to connect to service %v", sa)
+			continue
+		}
+		adc := ad.NewAutoDeployerClient(conn)
+		req := &ad.MachineInfoRequest{}
+		mir, err := adc.GetMachineInfo(ctx, req)
+		if err != nil {
+			conn.Close()
+			fmt.Printf("Failed to get machine info on %v\n", sa)
+			continue
+		}
+		conn.Close()
+		mg := mir.MachineGroup
+		if mg == "" {
+			mg = "worker"
+		}
+		if mir.MachineGroup == name {
+			res = append(res, sa)
+		}
+	}
+
 	return res, nil
 }
 
