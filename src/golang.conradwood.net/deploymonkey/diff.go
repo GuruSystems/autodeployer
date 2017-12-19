@@ -175,7 +175,7 @@ func AreArgsIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
 // check if these two application definitions are identical
 // (in terms of actual deployment)
 func IsIdentical(ad1, ad2 *pb.ApplicationDefinition) bool {
-	if (ad1.DownloadURL != ad2.DownloadURL) || (ad1.DownloadUser != ad2.DownloadUser) || (ad1.DownloadPassword != ad2.DownloadPassword) || (ad1.Binary != ad2.Binary) || (ad1.BuildID != ad2.BuildID) || (ad1.Instances != ad2.Instances) {
+	if (ad1.DownloadURL != ad2.DownloadURL) || (ad1.DownloadUser != ad2.DownloadUser) || (ad1.DownloadPassword != ad2.DownloadPassword) || (ad1.Binary != ad2.Binary) || (ad1.BuildID != ad2.BuildID) || (ad1.Instances != ad2.Instances) || (ad1.Machines != ad2.Machines) {
 		return false
 	}
 	if !AreArgsIdentical(ad1, ad2) {
