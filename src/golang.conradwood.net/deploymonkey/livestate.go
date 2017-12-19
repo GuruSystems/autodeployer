@@ -97,6 +97,7 @@ func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 		return errors.New(s)
 	}
 	workers := len(fsas)
+	fmt.Printf("Got %d hosts to deploy on\n", workers)
 	workeridx := 0
 	for _, app := range ads {
 		fmt.Printf("Starting %d instances of %s\n", app.Instances, app.Repository)
@@ -221,7 +222,6 @@ func getDeployersInGroup(name string, all []*rpb.ServiceAddress) ([]*rpb.Service
 		name = "worker"
 	}
 	for _, sa := range all {
-		fmt.Printf("Querying service at: %s:%d\n", sa.Host, sa.Port)
 		conn, err := client.DialService(sa)
 		if err != nil {
 			fmt.Printf("Failed to connect to service %v", sa)
@@ -240,6 +240,8 @@ func getDeployersInGroup(name string, all []*rpb.ServiceAddress) ([]*rpb.Service
 		if mg == "" {
 			mg = "worker"
 		}
+		fmt.Printf("Autodeployer on %s is in group %s\n", sa.Host, mg)
+
 		if mir.MachineGroup == name {
 			res = append(res, sa)
 		}
