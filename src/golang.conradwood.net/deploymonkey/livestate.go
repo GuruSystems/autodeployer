@@ -60,7 +60,7 @@ func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 
 	// stopping stuff...
 	for _, sa := range sas {
-		fmt.Printf("Querying service at: %s:%d\n", sa.Host, sa.Port)
+		//fmt.Printf("Querying service at: %s:%d\n", sa.Host, sa.Port)
 		conn, err := client.DialService(sa)
 		if err != nil {
 			fmt.Printf("Failed to connect to service %v", sa)
@@ -86,20 +86,20 @@ func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 	// starting stuff
 	// also, this should start them up multi-threaded... and bla
 	err = nil
-	mgroup := "worker"
-	fsas, err := getDeployersInGroup(mgroup, sas)
-	if err != nil {
-		fmt.Printf("Could not get deployers for group %s: %s\n", mgroup, err)
-	}
-	if (fsas == nil) || (len(fsas) == 0) {
-		s := fmt.Sprintf("No deployers to deploy on for group %s (app=%v)", mgroup, ads)
-		fmt.Println(s)
-		return errors.New(s)
-	}
-	workers := len(fsas)
-	fmt.Printf("Got %d hosts to deploy on\n", workers)
 	workeridx := 0
 	for _, app := range ads {
+		mgroup := app.Machines
+		fsas, err := getDeployersInGroup(mgroup, sas)
+		if err != nil {
+			fmt.Printf("Could not get deployers for group %s: %s\n", mgroup, err)
+		}
+		if (fsas == nil) || (len(fsas) == 0) {
+			s := fmt.Sprintf("No deployers to deploy on for group %s (app=%v)", mgroup, ads)
+			fmt.Println(s)
+			return errors.New(s)
+		}
+		workers := len(fsas)
+		fmt.Printf("Got %d hosts to deploy on\n", workers)
 		fmt.Printf("Starting %d instances of %s\n", app.Instances, app.Repository)
 		instances := 0
 
