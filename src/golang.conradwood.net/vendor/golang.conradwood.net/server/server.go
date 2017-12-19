@@ -198,7 +198,7 @@ func authenticateToken(ctx context.Context, token string) (context.Context, erro
 			ps = fmt.Sprintf("%v", peer)
 		}
 
-		fmt.Printf("(%d) VerifyUserToken(%s) failed: %s (%v) for request from %s\n", repeat, token, err, authconn, ps)
+		fmt.Printf("(%d) VerifyUserToken(%s) failed: %s for request from %s\n", repeat, token, err, ps)
 		if repeat <= 1 {
 			return nil, err
 		}

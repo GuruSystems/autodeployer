@@ -66,11 +66,11 @@ func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 			fmt.Printf("Failed to connect to service %v", sa)
 			return err
 		}
-		defer conn.Close()
 		adc := ad.NewAutoDeployerClient(conn)
 
 		apps, err := getDeployments(adc, sa, stopPrefix)
 		if err != nil {
+			conn.Close()
 			return errors.New(fmt.Sprintf("Unable to get deployments from %v: %s", sa, err))
 		}
 		for _, appid := range apps {
@@ -81,6 +81,7 @@ func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 				fmt.Printf("Failed to shutdown %v @ %s:\n", sa, appid, err)
 			}
 		}
+		conn.Close()
 	}
 
 	// starting stuff
@@ -91,10 +92,10 @@ func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
 		mgroup := app.Machines
 		fsas, err := getDeployersInGroup(mgroup, sas)
 		if err != nil {
-			fmt.Printf("Could not get deployers for group %s: %s\n", mgroup, err)
+			fmt.Printf("Could not get deployers for group \"%s\": %s\n", mgroup, err)
 		}
 		if (fsas == nil) || (len(fsas) == 0) {
-			s := fmt.Sprintf("No deployers to deploy on for group %s (app=%v)", mgroup, ads)
+			s := fmt.Sprintf("No deployers to deploy on for group \"%s\" (app=%v)", mgroup, ads)
 			fmt.Println(s)
 			return errors.New(s)
 		}
