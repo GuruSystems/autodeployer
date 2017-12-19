@@ -240,9 +240,9 @@ func getDeployersInGroup(name string, all []*rpb.ServiceAddress) ([]*rpb.Service
 		if mg == "" {
 			mg = "worker"
 		}
-		fmt.Printf("Autodeployer on %s is in group %s\n", sa.Host, mg)
+		fmt.Printf("Autodeployer on %s is in group %s (requested: %s)\n", sa.Host, mg, name)
 
-		if mir.MachineGroup == name {
+		if mg == name {
 			res = append(res, sa)
 		}
 	}
