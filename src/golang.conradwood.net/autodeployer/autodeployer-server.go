@@ -72,6 +72,7 @@ type Deployed struct {
 	downloadUser     string
 	downloadPW       string
 	deploymentID     string
+	deploymentpath   string
 	logger           *logger.AsyncLogQueue
 	autoRegistration []*pb.AutoRegistration
 }
@@ -261,6 +262,8 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	du.args = cr.Args
 	du.url = cr.DownloadURL
 	du.binary = cr.Binary
+	path := fmt.Sprintf("%s/%s/%s/%d", du.namespace, du.groupname, du.repo, du.build)
+	du.deploymentpath = path
 
 	_, wd := filepath.Split(du.user.HomeDir)
 	wd = fmt.Sprintf("/srv/autodeployer/deployments/%s", wd)
@@ -386,8 +389,8 @@ func (s *AutoDeployer) InternalStartup(ctx context.Context, cr *pb.StartupReques
 		WorkingDir:       d.workingDir,
 	}
 	// add some standard args (which we pass to ALL deployments)
-	path := fmt.Sprintf("%s/%s/%s/%d", d.namespace, d.groupname, d.repo, d.build)
-	sr.Args = append(sr.Args, fmt.Sprintf("-deployment_gurupath=%s", path))
+
+	sr.Args = append(sr.Args, fmt.Sprintf("-deployment_gurupath=%s", d.deploymentpath))
 	return sr, nil
 }
 
@@ -709,10 +712,12 @@ func (du *Deployed) StartupCodeExec() {
 			if at == rpb.Apitype_tcp {
 				sd := server.NewTCPServerDef(ar.ServiceName)
 				sd.Port = port
+				sd.DeployPath = du.deploymentpath
 				server.AddRegistry(sd)
 			} else if at == rpb.Apitype_html {
 				sd := server.NewHTMLServerDef(ar.ServiceName)
 				sd.Port = port
+				sd.DeployPath = du.deploymentpath
 				server.AddRegistry(sd)
 			} else {
 				fmt.Printf("Cannot (yet) auto-register apitype: %s\n", at)
