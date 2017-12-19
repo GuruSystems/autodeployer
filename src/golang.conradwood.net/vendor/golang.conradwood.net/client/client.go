@@ -130,6 +130,7 @@ func hasApi(ar []pb.Apitype, lf pb.Apitype) bool {
 }
 
 // if one needs to, one can still connect explicitly to a service
+// this call DOES NOT CLOSE THE CONNECTION
 func DialService(sa *pb.ServiceAddress) (*grpc.ClientConn, error) {
 	serverAddr := fmt.Sprintf("%s:%d", sa.Host, sa.Port)
 	//fmt.Printf("Dialling service at \"%s\"\n", serverAddr)

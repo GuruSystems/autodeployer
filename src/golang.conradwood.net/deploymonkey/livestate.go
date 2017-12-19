@@ -186,7 +186,7 @@ func getDeployments(adc ad.AutoDeployerClient, sa *rpb.ServiceAddress, deplid st
 	var res []string
 	info, err := adc.GetDeployments(ctx, &ad.InfoRequest{})
 	if err != nil {
-		fmt.Printf("Failed to query service %v", sa)
+		fmt.Printf("Failed to query service %v: %s", sa, err)
 		return nil, err
 	}
 	for _, app := range info.Apps {
