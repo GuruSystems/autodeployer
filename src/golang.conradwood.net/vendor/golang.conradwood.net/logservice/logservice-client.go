@@ -20,6 +20,7 @@ var (
 	deplid      = flag.String("deploymentid", "", "The deployment id to log")
 	sid         = flag.String("startupid", "", "The startup id to log or to filter on")
 	follow_flag = flag.Bool("f", false, "follow (tail -f like)")
+	maxLines    = flag.Int("n", 500, "Maximum lines to retrieve")
 )
 
 func bail(err error, msg string) {
@@ -80,7 +81,7 @@ func showLog() {
 
 	cl := pb.NewLogServiceClient(conn)
 
-	minlog := int64(-500)
+	minlog := int64(0 - *maxLines)
 	glr := pb.GetLogRequest{
 		MinimumLogID: minlog,
 	}
@@ -106,11 +107,14 @@ func follow() {
 	cl := pb.NewLogServiceClient(conn)
 
 	minlog := int64(-20)
+	i := 0
 	for {
 		glr := pb.GetLogRequest{
 			MinimumLogID: minlog,
 		}
 		addFilters(&glr)
+		fmt.Printf("Querying %d...\r", i)
+		i++
 		lr, err := cl.GetLogCommandStdout(ctx, &glr)
 		bail(err, "Failed to get Logcommandstdout")
 		for _, entry := range lr.Entries {
