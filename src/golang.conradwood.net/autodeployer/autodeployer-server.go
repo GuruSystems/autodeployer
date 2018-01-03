@@ -45,6 +45,7 @@ var (
 	startTimeout = flag.Int("start_timeout", 5, "timeout a deployment after `seconds`")
 	machineGroup = flag.String("machinegroup", "worker", "the group a specific machine is in")
 	testfile     = flag.String("cfgfile", "", "config file (for testing)")
+	waitdir      = flag.String("waitdir", "", "Block startup until this `directory` exists")
 )
 
 // information about a currently deployed application
@@ -121,6 +122,12 @@ func main() {
 		return
 	}
 
+	if *waitdir != "" {
+		for !exists(*waitdir) {
+			fmt.Printf("Waiting for %s\n", *waitdir)
+			time.Sleep(time.Second * 1)
+		}
+	}
 	// we are brutal - if we startup we slay all deployment users
 	slayAll()
 	if *testfile != "" {
@@ -791,4 +798,13 @@ func convStringToApitypes(apitypestring string) ([]rpb.Apitype, error) {
 		res = append(res, av)
 	}
 	return res, nil
+}
+
+// exists returns whether the given file or directory exists or not
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	return false
 }
