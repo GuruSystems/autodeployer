@@ -7,6 +7,10 @@ export GOARCH=amd64
 
 
 export GOBIN=`pwd`/dist
+
+rm -rf dist
+mkdir dist
+
 export GOPATH=`pwd`
 echo "GOPATH=$GOPATH"
 mkdir $GOBIN
