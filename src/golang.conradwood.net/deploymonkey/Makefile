@@ -13,9 +13,13 @@ client: proto
 
 all:	client server
 
+clean:
+	rm proto/*.go || echo ok
+
 .PHONY: proto
 proto:
 	@echo compiling Go proto stubs
+	pwd
 	@protoc ${PROTOCINC} --go_out=plugins=grpc:. proto/deploymonkey.proto
 	# for json gateway to compile you need the plugins:
 	# 1. protoc-gen-swagger

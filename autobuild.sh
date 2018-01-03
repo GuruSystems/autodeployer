@@ -10,14 +10,15 @@ export GOBIN=`pwd`/dist
 export GOPATH=`pwd`
 echo "GOPATH=$GOPATH"
 mkdir $GOBIN
+MYSRC=src/golang.conradwood.net/deploymonkey
+( cd ${MYSRC} && make proto ) || exit 10
+
 MYSRC=src/golang.conradwood.net/autodeployer
 ( cd ${MYSRC} && make proto ) || exit 10
 ( cd ${MYSRC} && make client ) || exit 10
 ( cd ${MYSRC} && make server ) || exit 10
 cp -rvf ${MYSRC}/proto dist/
 
-MYSRC=src/golang.conradwood.net/deploymonkey
-( cd ${MYSRC} && make proto ) || exit 10
 ( cd ${MYSRC} && make client ) || exit 10
 ( cd ${MYSRC} && make server ) || exit 10
 cp -rvf ${MYSRC}/proto dist/
