@@ -165,6 +165,7 @@ func deployOn(sa *rpb.ServiceAddress, group *DBGroup, app *pb.ApplicationDefinit
 		Namespace:        group.groupDef.Namespace,
 		Groupname:        group.groupDef.GroupID,
 		AutoRegistration: app.AutoRegs,
+		DeployType:       app.DeployType,
 	}
 	dres, err := adc.Deploy(ctx, &dr)
 	if err != nil {

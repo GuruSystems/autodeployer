@@ -25,6 +25,7 @@ message DeployRequest {
  string Namespace=9;
  string Groupname=10;
  repeated AutoRegistration AutoRegistration=11;
+ string DeployType=12;
 }
 enum DeploymentStatus {
 // nothing happened yet

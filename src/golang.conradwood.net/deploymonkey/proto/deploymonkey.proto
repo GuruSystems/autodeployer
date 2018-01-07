@@ -24,6 +24,7 @@ message ApplicationDefinition {
  string DeploymentID=9;
  repeated autodeployer.AutoRegistration AutoRegs=10;
  string Machines=11;
+ string DeployType=12;
 }
 
 // a group consists of one or more applications
