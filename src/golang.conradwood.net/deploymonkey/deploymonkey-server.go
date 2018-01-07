@@ -803,3 +803,13 @@ func (s *DeployMonkey) GetApplications(ctx context.Context, cr *pb.GetAppsReques
 	resp.Applications = ad
 	return &resp, nil
 }
+
+func (s *DeployMonkey) ParseConfigFile(ctx context.Context, cr *pb.ParseRequest) (*pb.ParseConfigResponse, error) {
+	fd, err := ParseConfig([]byte(cr.Config))
+	if err != nil {
+		return nil, err
+	}
+	res := pb.ParseConfigResponse{}
+	res.GroupDef = fd.Groups
+	return &res, nil
+}

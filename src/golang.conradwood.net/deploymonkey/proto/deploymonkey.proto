@@ -103,6 +103,14 @@ string GroupID=2;
 string Repository=3;
 uint64 BuildID=4;
 }
+
+message ParseRequest {
+string Config=1;
+}
+message ParseConfigResponse {
+repeated GroupDefinitionRequest GroupDef =1;
+}
+
 service DeployMonkey {
 rpc DefineGroup(GroupDefinitionRequest) returns (GroupDefResponse);
 rpc DeployVersion(DeployRequest) returns (DeployResponse);
@@ -113,4 +121,5 @@ rpc UpdateApp(UpdateAppRequest) returns (GroupDefResponse);
 rpc GetNameSpaces(GetNameSpaceRequest) returns (GetNameSpaceResponse);
 rpc GetGroups(GetGroupsRequest) returns (GetGroupsResponse);
 rpc GetApplications(GetAppsRequest) returns (GetAppsResponse);
+rpc ParseConfigFile(ParseRequest) returns (ParseConfigResponse);
 }

@@ -20,10 +20,24 @@ func ParseFile(fname string) (*FileDef, error) {
 		fmt.Printf("Failed to read file %s: %s\n", fname, err)
 		return nil, err
 	}
-	gd := FileDef{}
-	err = yaml.Unmarshal(fb, &gd)
+	res, err := ParseConfig(fb)
 	if err != nil {
 		fmt.Printf("Failed to parse file %s: %s\n", fname, err)
+		return nil, err
+	}
+	fmt.Printf("Found %d groups in file %s\n", len(res.Groups), fname)
+	fmt.Printf("Namespace: %s\n", res.Namespace)
+	for _, x := range res.Groups {
+		PrintGroup(x)
+	}
+
+	return res, nil
+}
+func ParseConfig(config []byte) (*FileDef, error) {
+	gd := FileDef{}
+	err := yaml.Unmarshal(config, &gd)
+	if err != nil {
+		fmt.Printf("Failed to parse yaml: %s\n", err)
 		return nil, err
 	}
 	// apply namespace throughout
@@ -39,11 +53,6 @@ func ParseFile(fname string) (*FileDef, error) {
 				return nil, err
 			}
 		}
-	}
-	fmt.Printf("Found %d groups in file %s\n", len(gd.Groups), fname)
-	fmt.Printf("Namespace: %s\n", gd.Namespace)
-	for _, x := range gd.Groups {
-		PrintGroup(x)
 	}
 	return &gd, nil
 }
