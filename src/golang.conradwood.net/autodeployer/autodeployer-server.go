@@ -244,6 +244,23 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 	if cr.Repository == "" {
 		return nil, errors.New("Repositoryname is required")
 	}
+
+	// if it's a webpackage, go easy
+
+	if cr.DeployType == "webpackage" {
+		err := DeployWebPackage(cr)
+		if err != nil {
+			return nil, err
+		}
+		resp := pb.DeployResponse{
+			Success: true,
+			Message: "OK",
+			Running: false}
+		return &resp, nil
+	}
+
+	// it's not a webpackage...
+
 	for _, ar := range cr.AutoRegistration {
 		_, err := convStringToApitypes(ar.ApiTypes)
 		if err != nil {
