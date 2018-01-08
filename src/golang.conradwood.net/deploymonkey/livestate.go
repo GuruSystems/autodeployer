@@ -149,6 +149,8 @@ func MakeItSoAsync(m miso) error {
 				retries = 5
 				continue
 			}
+			// deadline expired? reset context
+			ctx = client.SetAuthToken()
 			retries--
 			fmt.Printf("failed to deploy an instance: %s (retries=%d)\n", terr, retries)
 		}
