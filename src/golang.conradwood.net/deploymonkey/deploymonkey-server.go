@@ -835,3 +835,7 @@ func (s *DeployMonkey) ParseConfigFile(ctx context.Context, cr *pb.ParseRequest)
 	res.GroupDef = fd.Groups
 	return &res, nil
 }
+func (s *DeployMonkey) ApplyVersions(ctx context.Context, cr *pb.ApplyRequest) (*pb.EmptyMessage, error) {
+	applyAllVersions(cr.All)
+	return &pb.EmptyMessage{}, nil
+}

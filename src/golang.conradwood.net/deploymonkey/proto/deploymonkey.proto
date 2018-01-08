@@ -111,6 +111,10 @@ string Config=1;
 message ParseConfigResponse {
 repeated GroupDefinitionRequest GroupDef =1;
 }
+message EmptyMessage{}
+message ApplyRequest {
+bool All=1;
+}
 
 service DeployMonkey {
 rpc DefineGroup(GroupDefinitionRequest) returns (GroupDefResponse);
@@ -123,4 +127,5 @@ rpc GetNameSpaces(GetNameSpaceRequest) returns (GetNameSpaceResponse);
 rpc GetGroups(GetGroupsRequest) returns (GetGroupsResponse);
 rpc GetApplications(GetAppsRequest) returns (GetAppsResponse);
 rpc ParseConfigFile(ParseRequest) returns (ParseConfigResponse);
+rpc ApplyVersions(ApplyRequest) returns (EmptyMessage);
 }

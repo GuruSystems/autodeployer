@@ -301,6 +301,7 @@ func (s *AutoDeployer) Deploy(ctx context.Context, cr *pb.DeployRequest) (*pb.De
 		fmt.Printf("Failed to create working directory %s: %s\n", wd, err)
 		return nil, err
 	}
+	fmt.Printf("Creating startupid...\n")
 	du.startupMsg = RandomString(16)
 	binname := os.Args[0]
 	fmt.Printf("Binary name (self): \"%s\"\n", binname)
