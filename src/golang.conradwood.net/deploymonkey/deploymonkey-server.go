@@ -51,6 +51,13 @@ func st(server *grpc.Server) error {
 func main() {
 	var err error
 	flag.Parse() // parse stuff. see "var" section above
+
+	err := initDB()
+	if err != nil {
+		fmt.Printf("Failed to initdb(): %s\n", err)
+		dbcon = nil
+	}
+
 	if *file != "" {
 		importFile(*file)
 		if dbcon != nil {
@@ -65,8 +72,8 @@ func main() {
 		}
 	}
 	if *applyonly {
-		if err == nil {
-			os.Exit(0)
+		if dbcon != nil {
+			dbcon.Close()
 		}
 		os.Exit(10)
 	}
@@ -83,6 +90,9 @@ func main() {
 	err = server.ServerStartup(sd)
 	if err != nil {
 		fmt.Printf("failed to start server: %s\n", err)
+	}
+	if dbcon != nil {
+		dbcon.Close()
 	}
 	fmt.Printf("Done\n")
 	return
