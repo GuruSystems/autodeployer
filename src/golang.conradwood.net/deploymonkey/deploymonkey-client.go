@@ -101,7 +101,11 @@ func listConfig() {
 				GroupName: gs.GroupID}
 			gapps, err := cl.GetApplications(ctx, &gar)
 			bail(err, "Failed to get applications")
-			fmt.Printf("      %s (%d applications)\n", gs, len(gapps.Applications))
+			marker := ""
+			if gs.PendingVersion != gs.DeployedVersion {
+				marker = " ** <-- **"
+			}
+			fmt.Printf("      %s (%d applications)%s\n", gs, len(gapps.Applications), marker)
 			for _, app := range gapps.Applications {
 				fmt.Printf("           %dx Repo=%s, Binary=%s, BuildID=#%d, %d autoregistrations\n", app.Instances, app.Repository, app.Binary, app.BuildID, len(app.AutoRegs))
 			}
