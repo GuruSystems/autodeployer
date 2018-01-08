@@ -21,12 +21,18 @@ var (
 	buildid       = flag.Int("buildid", 0, "the new buildid of the app in the group to update")
 	binary        = flag.String("binary", "", "the binary of the app in the group to update")
 	apply_version = flag.Int("apply_version", 0, "(re-)apply a given version")
+	applyall      = flag.Bool("apply_all", false, "reapply ALL groups")
+	applypending  = flag.Bool("apply_pending", false, "reapply any pending group versions")
 )
 
 func main() {
 	flag.Parse()
 
 	done := false
+	if *applyall || *applypending {
+		applyVersions()
+		done = true
+	}
 	if *apply_version != 0 {
 		applyVersion()
 		done = true
@@ -58,6 +64,26 @@ func bail(err error, msg string) {
 	os.Exit(10)
 }
 
+func applyVersions() {
+	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
+	if err != nil {
+		fmt.Println("failed to dial: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := client.SetAuthToken()
+
+	cl := pb.NewDeployMonkeyClient(conn)
+	all := *applyall
+	dr := pb.ApplyRequest{All: all}
+	resp, err := cl.ApplyVersions(ctx, &dr)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err)
+		return
+	}
+	fmt.Printf("Response: %v\n", resp)
+}
+
 func applyVersion() {
 	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
 	if err != nil {
@@ -75,8 +101,8 @@ func applyVersion() {
 		return
 	}
 	fmt.Printf("Response: %v\n", resp)
-
 }
+
 func listConfig() {
 	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
 	if err != nil {

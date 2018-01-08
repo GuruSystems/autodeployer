@@ -836,6 +836,6 @@ func (s *DeployMonkey) ParseConfigFile(ctx context.Context, cr *pb.ParseRequest)
 	return &res, nil
 }
 func (s *DeployMonkey) ApplyVersions(ctx context.Context, cr *pb.ApplyRequest) (*pb.EmptyMessage, error) {
-	applyAllVersions(cr.All)
+	applyAllVersions(!cr.All)
 	return &pb.EmptyMessage{}, nil
 }
