@@ -31,8 +31,18 @@ const (
 )
 
 var (
-	ctx context.Context
+	ctx        context.Context
+	asyncMaker = make(chan miso)
 )
+
+type miso struct {
+	group *DBGroup
+	ads   []*pb.ApplicationDefinition
+}
+
+func init() {
+	go MakeItSoLoop()
+}
 
 // this is the most simplest, but definitely not The Right Thing to do
 // how it *should* work:
@@ -44,6 +54,22 @@ var (
 // * if all succeeded:
 // * clear those which are no longer needed (e.g. old ones in a lower version)
 func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
+	m := miso{group: group, ads: ads}
+	asyncMaker <- m
+	return nil
+}
+
+func MakeItSoLoop() {
+	for {
+		m := <-asyncMaker
+		MakeItSoAsync(m)
+	}
+}
+
+func MakeItSoAsync(m miso) error {
+	group := m.group
+	ads := m.ads
+	fmt.Printf("Applying group %v", group)
 	sas, err := getDeployers()
 	if err != nil {
 		return err

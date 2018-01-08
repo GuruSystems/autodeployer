@@ -33,7 +33,12 @@ var (
 	dbcon            *sql.DB
 	dbinfo           string
 	applyLock        sync.Mutex
+	curApply         *applyingInfo
 )
+
+type applyingInfo struct {
+	version int
+}
 
 // callback from the compound initialisation
 func st(server *grpc.Server) error {
@@ -424,9 +429,12 @@ func updateDeployedVersionNumber(v int) error {
 
 // given a version of a group checks the workers and fixes it up to match version
 func applyVersion(v int) error {
-	fmt.Printf("Waiting for applyVersionLock()...\n")
+	fmt.Printf("Waiting for applyVersionLock() (held by %v)...\n", curApply)
 	applyLock.Lock()
 	defer applyLock.Unlock()
+	curApply = &applyingInfo{
+		version: v,
+	}
 	fmt.Printf("Applying version %d\n", v)
 	// first step: mark the version as pending
 	// so if it fails for some reason, we know what to replay
@@ -796,7 +804,7 @@ func (s *DeployMonkey) GetApplications(ctx context.Context, cr *pb.GetAppsReques
 		fmt.Println(s)
 		return nil, errors.New(s)
 	}
-	fmt.Printf("Deployed Version: %d\n", dbg.DeployedVersion)
+	fmt.Printf("Listing Deployed Version: %d\n", dbg.DeployedVersion)
 	ad, err := loadAppGroupVersion(dbg.DeployedVersion)
 	if err != nil {
 		s := fmt.Sprintf("No applications for version %d: (%s,%s)\n", dbg.DeployedVersion, cr.NameSpace, cr.GroupName)
