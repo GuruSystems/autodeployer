@@ -156,7 +156,7 @@ func DownloadBinary(url string, target string, user string, pw string) error {
 		outfile = "download.tar"
 		archive = true
 	}
-	err := downloadFromURL(url, outfile, user, pw)
+	err := DownloadFromURL(url, outfile, user, pw)
 	if err != nil {
 		return err
 	}
@@ -169,13 +169,12 @@ func DownloadBinary(url string, target string, user string, pw string) error {
 		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
 
 // download a file to 'target'
-func downloadFromURL(url string, target string, user string, pw string) error {
+func DownloadFromURL(url string, target string, user string, pw string) error {
 	fileName := target
 	fmt.Println("Downloading", url, "to", fileName)
 

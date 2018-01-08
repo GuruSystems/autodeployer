@@ -12,6 +12,10 @@ server:
 client:
 	echo "no client for auth lib"
 
+all:
+	echo nothing todo 
+
+
 .PHONY: proto
 proto:
 	@echo compiling Go proto stubs

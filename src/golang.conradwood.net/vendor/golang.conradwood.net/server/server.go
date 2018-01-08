@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.conradwood.net/cmdline"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/credentials"
@@ -41,6 +42,7 @@ var (
 	registered       []*serverDef
 	stopped          bool
 	ticker           *time.Ticker
+	promHandler      http.Handler
 )
 
 type UserCache struct {
@@ -291,6 +293,7 @@ func startHttpServe(sd *serverDef, grpcServer *grpc.Server) error {
 	mux.HandleFunc("/internal/pleaseshutdown", func(w http.ResponseWriter, req *http.Request) {
 		pleaseShutdown(w, req, sd)
 	})
+	mux.Handle("/internal/service-info/metrics", promhttp.Handler())
 	gwmux := runtime.NewServeMux()
 	mux.Handle("/", gwmux)
 	serveSwagger(mux)
@@ -414,7 +417,8 @@ func reRegister() {
 }
 
 // expose an ever-increasing counter with the given metric
-func ExposeMetricCounter(name string, value *uint64) error {
+// Deprecation: We switched to prometheus
+func exposeMetricCounter(name string, value *uint64) error {
 	ctrmetrics[name] = value
 	return nil
 }
