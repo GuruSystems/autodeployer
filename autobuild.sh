@@ -11,6 +11,9 @@ export GOBIN=`pwd`/dist
 rm -rf dist
 mkdir dist
 
+build-repo-client -branch=${GIT_BRANCH} -build=${BUILD_NUMBER} -commitid=${COMMIT_ID} -commitmsg="commit msg unknown" -repository=${PROJECT_NAME} -versiondir=src/ || exit 10
+
+
 export GOPATH=`pwd`
 echo "GOPATH=$GOPATH"
 mkdir $GOBIN
