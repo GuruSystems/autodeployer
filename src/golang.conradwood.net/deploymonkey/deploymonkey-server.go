@@ -423,8 +423,10 @@ func updateDeployedVersionNumber(v int) error {
 
 // given a version of a group checks the workers and fixes it up to match version
 func applyVersion(v int) error {
+	fmt.Printf("Waiting for applyVersionLock()...\n")
 	applyLock.Lock()
 	defer applyLock.Unlock()
+	fmt.Printf("Applying version %d\n", v)
 	// first step: mark the version as pending
 	// so if it fails for some reason, we know what to replay
 	gid, err := getGroupIDFromVersion(v)
@@ -448,6 +450,7 @@ func applyVersion(v int) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("error loading apps for version %d: %s", v, err))
 	}
+	fmt.Printf("Makeitso (%d)...\n", v)
 	err = MakeItSo(dbgroup, apps)
 	if err != nil {
 		return errors.New(fmt.Sprintf("error applyings apps for version %d: %s", v, err))
