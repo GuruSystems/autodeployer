@@ -52,7 +52,7 @@ func main() {
 	var err error
 	flag.Parse() // parse stuff. see "var" section above
 
-	err := initDB()
+	err = initDB()
 	if err != nil {
 		fmt.Printf("Failed to initdb(): %s\n", err)
 		dbcon = nil
