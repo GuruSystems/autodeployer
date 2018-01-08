@@ -69,7 +69,7 @@ func MakeItSoLoop() {
 func MakeItSoAsync(m miso) error {
 	group := m.group
 	ads := m.ads
-	fmt.Printf("Applying group %v", group)
+	fmt.Printf("Applying group %v\n", group)
 	sas, err := getDeployers()
 	if err != nil {
 		return err
@@ -193,6 +193,7 @@ func deployOn(sa *rpb.ServiceAddress, group *DBGroup, app *pb.ApplicationDefinit
 		AutoRegistration: app.AutoRegs,
 		DeployType:       app.DeployType,
 	}
+	fmt.Printf("Sending deploy request...\n")
 	dres, err := adc.Deploy(ctx, &dr)
 	if err != nil {
 		fmt.Printf("failed to deploy %v on %v: %s\n", app, adc, err)
