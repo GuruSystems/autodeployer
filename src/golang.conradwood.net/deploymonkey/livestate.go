@@ -32,7 +32,7 @@ const (
 
 var (
 	ctx        context.Context
-	asyncMaker = make(chan miso)
+	asyncMaker = make(chan miso, 100)
 )
 
 type miso struct {
@@ -54,6 +54,7 @@ func init() {
 // * if all succeeded:
 // * clear those which are no longer needed (e.g. old ones in a lower version)
 func MakeItSo(group *DBGroup, ads []*pb.ApplicationDefinition) error {
+	fmt.Printf("Request to upgrade group %v with %d groups in queue to be updated\n", group, len(asyncMaker))
 	m := miso{group: group, ads: ads}
 	asyncMaker <- m
 	return nil
