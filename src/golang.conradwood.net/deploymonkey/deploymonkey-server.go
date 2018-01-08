@@ -20,18 +20,19 @@ import (
 
 // static variables for flag parser
 var (
-	port          = flag.Int("port", 4999, "The server port")
-	dbhost        = flag.String("dbhost", "postgres", "hostname of the postgres database rdms")
-	dbdb          = flag.String("database", "deploymonkey", "database to use for authentication")
-	dbuser        = flag.String("dbuser", "root", "username for the database to use for authentication")
-	dbpw          = flag.String("dbpw", "pw", "password for the database to use for authentication")
-	file          = flag.String("filename", "", "filename with a group definition (for testing)")
-	applyonly     = flag.Bool("apply_only", false, "if true will apply current config and exit")
-	testmode      = flag.Bool("testmode", false, "sets some stuff to make it more convenient to test")
-	applyinterval = flag.Int("apply_interval", 60, "`seconds` between scans for discrepancies and re-applying them")
-	dbcon         *sql.DB
-	dbinfo        string
-	applyLock     sync.Mutex
+	port             = flag.Int("port", 4999, "The server port")
+	dbhost           = flag.String("dbhost", "postgres", "hostname of the postgres database rdms")
+	dbdb             = flag.String("database", "deploymonkey", "database to use for authentication")
+	dbuser           = flag.String("dbuser", "root", "username for the database to use for authentication")
+	dbpw             = flag.String("dbpw", "pw", "password for the database to use for authentication")
+	file             = flag.String("filename", "", "filename with a group definition (for testing)")
+	applyonly        = flag.Bool("apply_only", false, "if true will apply current config and exit")
+	testmode         = flag.Bool("testmode", false, "sets some stuff to make it more convenient to test")
+	reapply_on_start = flag.Bool("reapply", false, "set to true if you want deploymonkey to reset all versions (shuts down all services and restarts them!!")
+	applyinterval    = flag.Int("apply_interval", 60, "`seconds` between scans for discrepancies and re-applying them")
+	dbcon            *sql.DB
+	dbinfo           string
+	applyLock        sync.Mutex
 )
 
 // callback from the compound initialisation
@@ -52,7 +53,7 @@ func main() {
 		}
 		os.Exit(0)
 	}
-	if !*testmode {
+	if (!*testmode) && (reapply_on_start) {
 		err := applyAllVersions(false)
 		if err != nil {
 			fmt.Printf("Failed to apply all versions: %s\n", err)
