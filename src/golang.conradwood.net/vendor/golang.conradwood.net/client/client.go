@@ -212,7 +212,7 @@ func SetAuthToken() context.Context {
 	md := metadata.Pairs("token", tok,
 		"clid", "itsme",
 	)
-	millis := 2000
+	millis := 5000
 	ctx, _ := context.WithTimeout(context.Background(), time.Duration(millis)*time.Millisecond)
 	ctx = metadata.NewOutgoingContext(ctx, md)
 	return ctx
