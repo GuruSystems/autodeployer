@@ -53,7 +53,7 @@ func main() {
 		}
 		os.Exit(0)
 	}
-	if (!*testmode) && (reapply_on_start) {
+	if (!*testmode) && (*reapply_on_start) {
 		err := applyAllVersions(false)
 		if err != nil {
 			fmt.Printf("Failed to apply all versions: %s\n", err)
