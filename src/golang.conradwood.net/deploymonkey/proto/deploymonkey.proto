@@ -95,8 +95,16 @@ message GetAppsRequest {
 string NameSpace=1;
 string GroupName=2; 
 }
+message GetAppResponse {
+ ApplicationDefinition Application=1;
+ int64 Created=2;
+ int64 VersionID=3;
+}
+message GetAppVersionsResponse {
+repeated GetAppResponse Apps=1;
+}
 message GetAppsResponse {
-repeated ApplicationDefinition Applications=4;
+repeated ApplicationDefinition Applications=1;
 }
 message UpdateRepoRequest {
 string Namespace=1;
@@ -115,6 +123,9 @@ message EmptyMessage{}
 message ApplyRequest {
 bool All=1;
 }
+message ListVersionRequest {
+string Repository=1;
+}
 
 service DeployMonkey {
 rpc DefineGroup(GroupDefinitionRequest) returns (GroupDefResponse);
@@ -128,4 +139,7 @@ rpc GetGroups(GetGroupsRequest) returns (GetGroupsResponse);
 rpc GetApplications(GetAppsRequest) returns (GetAppsResponse);
 rpc ParseConfigFile(ParseRequest) returns (ParseConfigResponse);
 rpc ApplyVersions(ApplyRequest) returns (EmptyMessage);
+
+// list previous versions for a given group
+rpc ListVersionsForGroup(ListVersionRequest) returns (GetAppVersionsResponse);
 }

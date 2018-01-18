@@ -2,11 +2,10 @@ package main
 
 import (
 	"database/sql"
-	_ "github.com/lib/pq"
-
 	"errors"
 	"flag"
 	"fmt"
+	_ "github.com/lib/pq"
 	apb "golang.conradwood.net/autodeployer/proto"
 	pb "golang.conradwood.net/deploymonkey/proto"
 	"golang.conradwood.net/server"
@@ -30,6 +29,7 @@ var (
 	testmode         = flag.Bool("testmode", false, "sets some stuff to make it more convenient to test")
 	reapply_on_start = flag.Bool("reapply", false, "set to true if you want deploymonkey to reset all versions (shuts down all services and restarts them!!")
 	applyinterval    = flag.Int("apply_interval", 60, "`seconds` between scans for discrepancies and re-applying them")
+	list             = flag.String("list", "", "list this `repository` previous versions")
 	dbcon            *sql.DB
 	dbinfo           string
 	applyLock        sync.Mutex
@@ -38,6 +38,16 @@ var (
 
 type applyingInfo struct {
 	version int
+}
+
+type appVersionDef struct {
+	appdef *pb.ApplicationDefinition
+	gv     *groupVersion
+}
+type groupVersion struct {
+	Version int
+	GroupID int
+	Created time.Time
 }
 
 // callback from the compound initialisation
@@ -56,6 +66,10 @@ func main() {
 	if err != nil {
 		fmt.Printf("Failed to initdb(): %s\n", err)
 		dbcon = nil
+	}
+	if *list != "" {
+		listVersions(*list)
+		os.Exit(0)
 	}
 
 	if *file != "" {
@@ -348,11 +362,17 @@ func loadAppGroupVersion(version int) ([]*pb.ApplicationDefinition, error) {
 }
 
 // turns a database row into an applicationdefinition object
-func loadApp(row *sql.Rows) (*pb.ApplicationDefinition, error) {
+// optionally suppling an interface to take up additional values
+func loadApp(row *sql.Rows, dest ...interface{}) (*pb.ApplicationDefinition, error) {
 	var id int
 	res := pb.ApplicationDefinition{}
-	err := row.Scan(&id, &res.DownloadURL, &res.DownloadUser, &res.DownloadPassword,
+	var t []interface{}
+	t = append(t, &id, &res.DownloadURL, &res.DownloadUser, &res.DownloadPassword,
 		&res.Binary, &res.Repository, &res.BuildID, &res.Instances, &res.Machines, &res.DeployType)
+	for _, z := range dest {
+		t = append(t, z)
+	}
+	err := row.Scan(t...)
 	if err != nil {
 		return nil, err
 	}
@@ -414,13 +434,13 @@ func loadAutoReg(id int) ([]*apb.AutoRegistration, error) {
 }
 
 // get group id from version
-func getGroupIDFromVersion(v int) (int, error) {
-	var groupid int
-	err := dbcon.QueryRow("select group_id from group_version where id = $1", v).Scan(&groupid)
+func getGroupIDFromVersion(v int) (*groupVersion, error) {
+	gr := groupVersion{Version: v}
+	err := dbcon.QueryRow("select group_id,created from group_version where id = $1", v).Scan(&gr.GroupID, &gr.Created)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return groupid, nil
+	return &gr, nil
 }
 
 // update the deployed version of a group (group referred to by version!)
@@ -429,7 +449,7 @@ func updateDeployedVersionNumber(v int) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Invalid Group-Version: \"%d\": %s", v, err))
 	}
-	_, err = dbcon.Exec("update appgroup set deployedversion = $1 where id = $2", v, gid)
+	_, err = dbcon.Exec("update appgroup set deployedversion = $1 where id = $2", v, gid.GroupID)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Unable to update group: %s", err))
 	}
@@ -452,12 +472,12 @@ func applyVersion(v int) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Invalid Group-Version: \"%d\": %s", v, err))
 	}
-	_, err = dbcon.Exec("update appgroup set pendingversion = $1 where id = $2", v, gid)
+	_, err = dbcon.Exec("update appgroup set pendingversion = $1 where id = $2", v, gid.GroupID)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Unable to update group: %s", err))
 	}
 	var ns, gn string
-	err = dbcon.QueryRow("SELECT namespace,groupname from appgroup where id = $1", gid).Scan(&ns, &gn)
+	err = dbcon.QueryRow("SELECT namespace,groupname from appgroup where id = $1", gid.GroupID).Scan(&ns, &gn)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Unable to get groupnames: %s", err))
 	}
@@ -777,6 +797,49 @@ func (s *DeployMonkey) GetGroups(ctx context.Context, cr *pb.GetGroupsRequest) (
 	}
 
 	return &resp, nil
+}
+func (s *DeployMonkey) ListVersionsForGroup(ctx context.Context, cr *pb.ListVersionRequest) (*pb.GetAppVersionsResponse, error) {
+	avds, err := listVersions(cr.Repository)
+	if err != nil {
+		return nil, err
+	}
+	res := pb.GetAppVersionsResponse{}
+	for _, avd := range avds {
+		gar := pb.GetAppResponse{
+			Created:     avd.gv.Created.Unix(),
+			VersionID:   int64(avd.gv.Version),
+			Application: avd.appdef,
+		}
+		res.Apps = append(res.Apps, &gar)
+	}
+	return &res, nil
+}
+func listVersions(repo string) ([]*appVersionDef, error) {
+	if dbcon == nil {
+		return nil, errors.New("database not open")
+	}
+	// this query gives us the version in lnk_app_grp.group_version_id
+	rows, err := dbcon.Query("SELECT appdef.id,sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances,mgroup,deploytype,lnk_app_grp.group_version_id,group_version.created from appdef, lnk_app_grp,group_version where appdef.id = lnk_app_grp.app_id and group_version.id = lnk_app_grp.group_version_id and repo = $1 order by group_version.id desc limit 20", repo) //and lnk_app_grp.group_version_id = $1", version)
+	if err != nil {
+		fmt.Printf("Failed to get apps:%s\n", err)
+		return nil, err
+	}
+	var res []*appVersionDef
+	for rows.Next() {
+		gv := groupVersion{}
+		ad, err := loadApp(rows, &gv.Version, &gv.Created)
+		if err != nil {
+			fmt.Printf("Failed to get apps:%s\n", err)
+			return nil, err
+		}
+		fmt.Printf("Version #%d: BuildID: %d, repository=%s (%v)\n", gv.Version, ad.BuildID, ad.Repository, gv.Created)
+		r := appVersionDef{
+			appdef: ad,
+			gv:     &gv,
+		}
+		res = append(res, &r)
+	}
+	return res, nil
 }
 
 func getStringsFromDB(sqls string, val string) ([]string, error) {
