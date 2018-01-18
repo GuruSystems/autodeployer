@@ -19,6 +19,7 @@ import (
 
 // static variables for flag parser
 var (
+	limit            = flag.Int("limit", 20, "max entries to return when querying for lists")
 	port             = flag.Int("port", 4999, "The server port")
 	dbhost           = flag.String("dbhost", "postgres", "hostname of the postgres database rdms")
 	dbdb             = flag.String("database", "deploymonkey", "database to use for authentication")
@@ -819,7 +820,7 @@ func listVersions(repo string) ([]*appVersionDef, error) {
 		return nil, errors.New("database not open")
 	}
 	// this query gives us the version in lnk_app_grp.group_version_id
-	rows, err := dbcon.Query("SELECT appdef.id,sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances,mgroup,deploytype,lnk_app_grp.group_version_id,group_version.created from appdef, lnk_app_grp,group_version where appdef.id = lnk_app_grp.app_id and group_version.id = lnk_app_grp.group_version_id and repo = $1 order by group_version.id desc limit 20", repo) //and lnk_app_grp.group_version_id = $1", version)
+	rows, err := dbcon.Query("SELECT appdef.id,sourceurl,downloaduser,downloadpw,executable,repo,buildid,instances,mgroup,deploytype,lnk_app_grp.group_version_id,group_version.created from appdef, lnk_app_grp,group_version where appdef.id = lnk_app_grp.app_id and group_version.id = lnk_app_grp.group_version_id and repo = $1 order by group_version.id desc limit $2", repo, *limit) //and lnk_app_grp.group_version_id = $1", version)
 	if err != nil {
 		fmt.Printf("Failed to get apps:%s\n", err)
 		return nil, err
