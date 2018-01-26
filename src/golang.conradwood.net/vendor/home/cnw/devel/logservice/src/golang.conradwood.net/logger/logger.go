@@ -10,9 +10,8 @@ import (
 )
 
 type QueueEntry struct {
-	sent    bool
-	created int64
-	line    string
+	sent bool
+	line string
 }
 type AsyncLogQueue struct {
 	lock           sync.Mutex
@@ -21,14 +20,8 @@ type AsyncLogQueue struct {
 	appDef         *pb.LogAppDef
 }
 
-func NewAsyncLogQueue(appname, repo, group, namespace, deplid string) (*AsyncLogQueue, error) {
-	b := &pb.LogAppDef{Appname: appname,
-		Repository:   repo,
-		Groupname:    group,
-		Namespace:    namespace,
-		DeploymentID: deplid,
-	}
-	alq := &AsyncLogQueue{appDef: b}
+func NewAsyncLogQueue(b *pb.LogRequest) (*AsyncLogQueue, error) {
+	alq := &AsyncLogQueue{logRequest: b}
 	t := time.NewTicker(2 * time.Second)
 	go func(a *AsyncLogQueue) {
 		for _ = range t.C {
@@ -38,11 +31,8 @@ func NewAsyncLogQueue(appname, repo, group, namespace, deplid string) (*AsyncLog
 	return alq, nil
 }
 func (alq *AsyncLogQueue) LogCommandStdout(line string, status string) error {
-	alq.lock.Lock()
-	defer alq.lock.Unlock()
 	qe := QueueEntry{sent: false,
-		created: time.Now().Unix(),
-		line:    line}
+		line: lr}
 	alq.lock.Lock()
 	alq.entries = append(alq.entries, &qe)
 	alq.lock.Unlock()
@@ -50,6 +40,7 @@ func (alq *AsyncLogQueue) LogCommandStdout(line string, status string) error {
 }
 
 func (alq *AsyncLogQueue) Flush() error {
+	var lasterr error
 	alq.lock.Lock()
 	defer alq.lock.Unlock()
 	// fmt.Printf("Sending %d log entries\n", len(alq.entries))
@@ -57,9 +48,7 @@ func (alq *AsyncLogQueue) Flush() error {
 		// save ourselves from dialing and stuff
 		return nil
 	}
-	lr := pb.LogRequest{
-		AppDef: alq.appDef,
-	}
+	retries := 5
 	for {
 		conn, err := client.DialWrapper("logservice.LogService")
 		if err != nil {
@@ -69,15 +58,28 @@ func (alq *AsyncLogQueue) Flush() error {
 		ctx := client.SetAuthToken()
 		cl := pb.NewLogServiceClient(conn)
 
+		lasterr = nil
 		for _, qe := range alq.entries {
-			lr.Lines = append(lr.Lines, &pb.LogLine{Time: qe.created, Line: qe.line})
-		}
-		_, err = cl.LogCommandStdout(ctx, &lr)
-		if err != nil {
-			if time.Since(alq.lastErrPrinted) > (10 * time.Second) {
-				fmt.Printf("Failed to send log: %s\n", err)
-				alq.lastErrPrinted = time.Now()
+			if qe.sent {
+				continue
 			}
+			_, err := cl.LogCommandStdout(ctx, qe.logRequest)
+			if err != nil {
+				if time.Since(alq.lastErrPrinted) > (10 * time.Second) {
+					fmt.Printf("Failed to send log: %s\n", err)
+					alq.lastErrPrinted = time.Now()
+				}
+				lasterr = err
+			} else {
+				qe.sent = true
+			}
+		}
+		if lasterr == nil {
+			break
+		}
+		retries--
+		if retries == 0 {
+			return errors.New(fmt.Sprintf("Failed to send logs. last error: %s", lasterr))
 		}
 	}
 	// all Done
