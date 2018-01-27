@@ -479,8 +479,8 @@ func waitForCommand(du *Deployed) {
 				Line: line,
 			}
 			req.Lines = append(req.Lines, &r)
-			du.logger.LogCommandStdout(line, fmt.Sprintf("%s", du.status))
 			fmt.Printf(">>>>COMMAND: %s: %s\n", du.toString(), line)
+			du.logger.LogCommandStdout(line, fmt.Sprintf("%s", du.status))
 			du.lastLine = line
 		}
 	}
