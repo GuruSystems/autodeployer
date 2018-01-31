@@ -10,7 +10,7 @@ import (
 
 var (
 	webdir  = flag.String("webdir", "/var/www/static", "Web directory to deploy webpackages into")
-	webLock = sync.Mutex
+	webLock sync.Mutex
 )
 
 // this deploys a webpackage
