@@ -1,0 +1,57 @@
+
+syntax = "proto3";
+
+package logservice;
+
+import "google/api/annotations.proto";
+
+message LogAppDef {
+   string Status=1;
+   string Appname=2;
+   string Repository=3;
+   string Groupname=4;
+   string Namespace=5;
+   string DeploymentID=6;
+   string StartupID=7;
+}
+
+message LogLine {
+   int64 Time=1;
+   string Line=2;
+}
+
+message LogRequest {
+   LogAppDef AppDef=1;
+   repeated LogLine Lines=2;
+}
+message LogResponse {}
+
+message LogFilter {
+ string Host=1;
+ string UserName=2;
+ LogAppDef AppDef=3;
+}
+
+message GetLogRequest{
+   // logical OR of stuff to retrieve - if null means EVERYTHING
+   repeated LogFilter LogFilter=1;
+   // minimum logid to retrieve (0=all) (negative means last n lines)
+   int64 MinimumLogID=2;
+}
+
+message LogEntry {
+ uint64 ID=1;
+ string Host=2;
+ string UserName=3;
+ uint64 Occured=4;
+ LogAppDef AppDef=5;
+ string Line=6;
+}
+message GetLogResponse {
+  repeated LogEntry Entries=1;
+}
+
+service LogService {
+   rpc LogCommandStdout(LogRequest) returns (LogResponse);
+   rpc GetLogCommandStdout(GetLogRequest) returns (GetLogResponse);
+}

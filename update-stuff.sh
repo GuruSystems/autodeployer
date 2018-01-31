@@ -1,9 +1,9 @@
 #!/bin/sh
 
 DOM=golang.conradwood.net
-M=`pwd`
-/home/cnw/devel/picoservices/copy-to-repo.sh ${M}/src/${DOM}/vendor/
-/home/cnw/devel/logservice/copy-to-repo.sh ${M}/src/${DOM}/vendor/
+
+/home/cnw/devel/picoservices/copy-to-repo.sh src/${DOM}/vendor/
+/home/cnw/devel/logservice/copy-to-repo.sh src/${DOM}/vendor/
 
 echo git adding new files...
 
