@@ -166,6 +166,7 @@ func DownloadBinary(url string, target string, user string, pw string) error {
 		cmd := exec.Command("/bin/tar", "-xf", outfile)
 		op, err := cmd.CombinedOutput()
 		fmt.Printf("tar output: %s\n", op)
+		os.Remove(outfile) // remove in any case, even if error
 		if err != nil {
 			return err
 		}
