@@ -479,8 +479,8 @@ func waitForCommand(du *Deployed) {
 				Line: line,
 			}
 			req.Lines = append(req.Lines, &r)
-			du.logger.LogCommandStdout(&req)
 			fmt.Printf(">>>>COMMAND: %s: %s\n", du.toString(), line)
+			du.logger.LogCommandStdout(line, fmt.Sprintf("%s", du.status))
 			du.lastLine = line
 		}
 	}
@@ -657,7 +657,7 @@ func checkLogger(d *Deployed) {
 	if d.logger != nil {
 		return
 	}
-	l, err := logger.NewAsyncLogQueue()
+	l, err := logger.NewAsyncLogQueue(d.binary, d.repo, d.groupname, d.namespace, d.deploymentID)
 	if err != nil {
 		fmt.Printf("Failed to initialize logger! %s\n", err)
 	} else {

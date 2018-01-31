@@ -6,13 +6,17 @@ CREATE SEQUENCE lnk_app_grp_serial
 
 CREATE SEQUENCE grp_version_serial
 
-# a group of apps (versioned)
+# a group of apps (versioned) (appgroups usually don't change. They roughly correspond to a single deploy.yaml file, which changes rarely)
 # there's a lack of foreign keys here for the versions because go database interface sucks
+# should have: 
+# pendingversion integer not null REFERENCES group_version('id')
+# deployedversion integer not null REFERENCES group_version('id')
 CREATE TABLE appgroup ( id integer PRIMARY KEY DEFAULT nextval('dbname_serial'), namespace varchar(100) not null, groupname varchar(100), deployedversion integer not null default 0, pendingversion integer not null default 0,unique(namespace,groupname)  )
 
+# an app (which is part of a group). One app per build...
 CREATE TABLE appdef ( id integer PRIMARY KEY DEFAULT nextval('appdef_serial'), sourceurl varchar(255) NOT NULL, downloaduser varchar(255), downloadpw varchar(255),executable varchar(255) NOT NULL, repo varchar(255) NOT NULL, buildid integer not null, instances integer not null)
 
-# groups are versioned..
+# groups are versioned.., one per build
 CREATE TABLE group_version ( id integer PRIMARY KEY DEFAULT nextval('grp_version_serial'), group_id integer NOT NULL references appgroup(id)  )
 
 # linking apps and group versions
@@ -30,5 +34,7 @@ CREATE TABLE autoreg ( id integer PRIMARY KEY DEFAULT nextval('autoreg_serial'),
 ALTER TABLE appdef add column mgroup varchar(1000) not null default ''
 
 ALTER TABLE appdef add column deploytype varchar(100) not null default ''
+
+ALTER TABLE group_version add column created timestamp not null default NOW()
 
 

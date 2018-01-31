@@ -10,6 +10,7 @@ import (
 	pb "golang.conradwood.net/deploymonkey/proto"
 	"google.golang.org/grpc"
 	"os"
+	"time"
 )
 
 // static variables for flag parser
@@ -23,12 +24,17 @@ var (
 	apply_version = flag.Int("apply_version", 0, "(re-)apply a given version")
 	applyall      = flag.Bool("apply_all", false, "reapply ALL groups")
 	applypending  = flag.Bool("apply_pending", false, "reapply any pending group versions")
+	list          = flag.String("list", "", "list this `repository` previous versions")
 )
 
 func main() {
 	flag.Parse()
 
 	done := false
+	if *list != "" {
+		callListVersions(*list)
+		os.Exit(0)
+	}
 	if *applyall || *applypending {
 		applyVersions()
 		done = true
@@ -62,6 +68,28 @@ func bail(err error, msg string) {
 	}
 	fmt.Printf("%s: %s\n", msg, err)
 	os.Exit(10)
+}
+
+func callListVersions(repo string) {
+	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
+	if err != nil {
+		fmt.Println("failed to dial: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := client.SetAuthToken()
+
+	cl := pb.NewDeployMonkeyClient(conn)
+	dr := pb.ListVersionRequest{Repository: repo}
+	resp, err := cl.ListVersionsForGroup(ctx, &dr)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err)
+		return
+	}
+	for _, a := range resp.Apps {
+		created := time.Unix(a.Created, 0)
+		fmt.Printf("Version #%d: created %v, Build %d, binary %s\n", a.VersionID, created, a.Application.BuildID, a.Application.Binary)
+	}
 }
 
 func applyVersions() {
