@@ -16,7 +16,7 @@ var (
 // this *should* be async?
 func DeployWebPackage(cr *pb.DeployRequest) error {
 	fmt.Printf("Deploying webpackage: %v\n", cr)
-	targetdir := *webdir
+	targetdir := fmt.Sprintf("%s/%s", *webdir, cr.Repository)
 	os.Mkdir(targetdir, 0777)
 
 	// BAD BAD BAD - this is ONE process space so this might overlap
