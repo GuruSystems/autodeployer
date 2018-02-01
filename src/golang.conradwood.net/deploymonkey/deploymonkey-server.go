@@ -328,6 +328,7 @@ func getGroupLatestVersion(namespace string, groupname string) (int, error) {
 		fmt.Printf("Failed to get latest version for (%s,%s):%s\n", namespace, groupname, err)
 		return 0, err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var maxid int
 		err = rows.Scan(&maxid)
@@ -400,6 +401,7 @@ func loadAppArgs(id int) ([]string, error) {
 		s := fmt.Sprintf("Failed to get tags for app %d:%s\n", id, err)
 		return nil, errors.New(s)
 	}
+	defer rows.Close()
 	for rows.Next() {
 		err = rows.Scan(&s)
 		if err != nil {
@@ -422,6 +424,7 @@ func loadAutoReg(id int) ([]*apb.AutoRegistration, error) {
 		s := fmt.Sprintf("Failed to get autoregs for app %d:%s\n", id, err)
 		return nil, errors.New(s)
 	}
+	defer rows.Close()
 	for rows.Next() {
 		ar := &apb.AutoRegistration{}
 		err = rows.Scan(&ar.Portdef, &ar.ServiceName, &ar.ApiTypes)
