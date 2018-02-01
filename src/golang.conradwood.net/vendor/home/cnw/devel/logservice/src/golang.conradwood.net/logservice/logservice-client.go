@@ -43,13 +43,30 @@ func main() {
 		showLog()
 		os.Exit(0)
 	}
-	queue, err := logger.NewAsyncLogQueue(*app_name, *repo, *groupname, *namespace, *deplid)
+	queue, err := logger.NewAsyncLogQueue()
 	bail(err, "Failed to create log queue")
+	ad := pb.LogAppDef{
+		Status:       *log_status,
+		Appname:      *app_name,
+		Repository:   *repo,
+		Groupname:    *groupname,
+		Namespace:    *namespace,
+		DeploymentID: *deplid,
+		StartupID:    *sid,
+	}
+	req := pb.LogRequest{
+		AppDef: &ad,
+	}
 	for _, line := range lines {
-		queue.LogCommandStdout(line, "EXECUSER")
+		r := pb.LogLine{
+			Time: time.Now().Unix(),
+			Line: line,
+		}
+		req.Lines = append(req.Lines, &r)
 		fmt.Printf("Logging: %s\n", line)
 	}
 
+	queue.LogCommandStdout(&req)
 	time.Sleep(5 * time.Second)
 	err = queue.Flush()
 	bail(err, "Failed to send log")

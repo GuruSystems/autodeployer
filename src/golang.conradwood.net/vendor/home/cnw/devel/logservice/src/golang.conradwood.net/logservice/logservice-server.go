@@ -19,13 +19,13 @@ import (
 
 // static variables for flag parser
 var (
-	port       = flag.Int("port", 10000, "The server port")
-	dbhost     = flag.String("dbhost", "postgres", "hostname of the postgres database rdms")
-	dbdb       = flag.String("database", "logservice", "database to use for authentication")
-	dbuser     = flag.String("dbuser", "root", "username for the database to use for authentication")
-	dbpw       = flag.String("dbpw", "pw", "password for the database to use for authentication")
-	debug      = flag.Bool("debug", false, "turn debug output on - DANGEROUS DO NOT USE IN PRODUCTION!")
-	usedb      = flag.Bool("log_to_db", true, "if false, print to std out only (not logging to database)!")
+	port   = flag.Int("port", 10000, "The server port")
+	dbhost = flag.String("dbhost", "postgres", "hostname of the postgres database rdms")
+	dbdb   = flag.String("database", "logservice", "database to use for authentication")
+	dbuser = flag.String("dbuser", "root", "username for the database to use for authentication")
+	dbpw   = flag.String("dbpw", "pw", "password for the database to use for authentication")
+	debug  = flag.Bool("debug", false, "turn debug output on - DANGEROUS DO NOT USE IN PRODUCTION!")
+
 	dbcon      *sql.DB
 	reqCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -82,13 +82,12 @@ func main() {
 	sd.Register = st
 	dbinfo := fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=require",
 		*dbhost, *dbuser, *dbpw, *dbdb)
-	if *usedb {
-		dbcon, err = sql.Open("postgres", dbinfo)
-		if err != nil {
-			fmt.Printf("Failed to connect to %s on host \"%s\" as \"%s\"\n", dbdb, dbhost, dbuser)
-			os.Exit(10)
-		}
+	dbcon, err = sql.Open("postgres", dbinfo)
+	if err != nil {
+		fmt.Printf("Failed to connect to %s on host \"%s\" as \"%s\"\n", dbdb, dbhost, dbuser)
+		os.Exit(10)
 	}
+
 	err = server.ServerStartup(sd)
 	if err != nil {
 		fmt.Printf("failed to start server: %s\n", err)
@@ -136,33 +135,26 @@ func (s *LogService) LogCommandStdout(ctx context.Context, lr *pb.LogRequest) (*
 	}
 	reqCounter.With(l).Inc()
 
-	if *debug {
-		fmt.Printf("Logging %d lines\n", len(lr.Lines))
-	}
 	//fmt.Printf("%s@%s called LogCommandStdout\n", user, peerhost)
-	for i, ll := range lr.Lines {
+	for _, ll := range lr.Lines {
 		line := ll.Line
 		if len(line) > 999 {
 			line = line[0:999]
 		}
-		if *debug {
-			fmt.Printf("%d of %d: \"%s\"\n", i, len(lr.Lines), line)
-		}
-		if *usedb {
-			_, err := dbcon.Exec("INSERT INTO logentry (loguser,peerhost,occured,status,appname,repository,namespace,groupname,deployment_id,startup_id,line) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
-				user, peerhost, ll.Time, lr.AppDef.Status,
-				lr.AppDef.Appname, lr.AppDef.Repository,
-				lr.AppDef.Namespace, lr.AppDef.Groupname,
-				lr.AppDef.DeploymentID, lr.AppDef.StartupID, line)
-			lineCounter.With(l).Inc()
-			if err != nil {
-				failCounter.With(l).Inc()
-				fmt.Printf("app=%s,user=%s: Failed to log a line: %s (%s)\n", lr.AppDef.Appname, user, err, line)
-				// we ignore the error and continue
-				// otherwise it will be sent over, and over, and over again
+		_, err := dbcon.Exec("INSERT INTO logentry (loguser,peerhost,occured,status,appname,repository,namespace,groupname,deployment_id,startup_id,line) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+			user, peerhost, ll.Time, lr.AppDef.Status,
+			lr.AppDef.Appname, lr.AppDef.Repository,
+			lr.AppDef.Namespace, lr.AppDef.Groupname,
+			lr.AppDef.DeploymentID, lr.AppDef.StartupID, line)
 
-				//return nil, errors.New(fmt.Sprintf("Failed to log line: %s\n", err))
-			}
+		lineCounter.With(l).Inc()
+		if err != nil {
+			failCounter.With(l).Inc()
+			fmt.Printf("app=%s,user=%s: Failed to log a line: %s (%s)\n", lr.AppDef.Appname, user, err, line)
+			// we ignore the error and continue
+			// otherwise it will be sent over, and over, and over again
+
+			//return nil, errors.New(fmt.Sprintf("Failed to log line: %s\n", err))
 		}
 	}
 	resp := pb.LogResponse{}

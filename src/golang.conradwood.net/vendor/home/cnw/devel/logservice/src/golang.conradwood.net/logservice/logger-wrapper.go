@@ -5,10 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"golang.conradwood.net/logger"
+	lpb "golang.conradwood.net/logservice/proto"
 	"io"
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 )
 
 // static variables for flag parser
@@ -49,11 +51,6 @@ func main() {
 	syscall.Dup2(int(os.Stdout.Fd()), int(os.Stderr.Fd()))
 
 	paras := flag.Args()
-	if len(paras) < 2 {
-		fmt.Printf("Usage: [name] [parameter1..n]\n")
-		fmt.Printf("Error: Missing name and/or parameters\n")
-		os.Exit(10)
-	}
 	name := paras[0]
 	paras = paras[1:]
 	cmd := com{Name: name, Paras: paras}
@@ -100,9 +97,25 @@ func waitForCommand(cmd *com) error {
 		line := lineOut.gotBytes(buf, ct)
 		if line != "" {
 			cmd.checkLogger()
-
+			ad := lpb.LogAppDef{
+				Status:       "EXECUSER",
+				Appname:      *app_name,
+				Repository:   *repo,
+				Groupname:    *groupname,
+				Namespace:    *namespace,
+				DeploymentID: *deplid,
+				StartupID:    *sid,
+			}
+			req := lpb.LogRequest{
+				AppDef: &ad,
+			}
+			r := lpb.LogLine{
+				Time: time.Now().Unix(),
+				Line: line,
+			}
 			fmt.Printf("Logging: \"%s\"\n", line)
-			cmd.logger.LogCommandStdout(line, "EXECUSER")
+			req.Lines = append(req.Lines, &r)
+			cmd.logger.LogCommandStdout(&req)
 		}
 	}
 	err := cmd.Cmd.Wait()
@@ -113,7 +126,7 @@ func (c *com) checkLogger() {
 	if c.logger != nil {
 		return
 	}
-	l, err := logger.NewAsyncLogQueue(*app_name, *repo, *groupname, *namespace, *deplid)
+	l, err := logger.NewAsyncLogQueue()
 	if err != nil {
 		fmt.Printf("Failed to initialize logger! %s\n", err)
 	} else {
