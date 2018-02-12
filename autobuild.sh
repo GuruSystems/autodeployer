@@ -31,5 +31,14 @@ MYSRC=src/golang.conradwood.net/deploymonkey
 ( cd ${MYSRC} && make server ) || exit 10
 cp -rvf ${MYSRC}/proto dist/
 
+
+export GOOS=darwin
+export GOARCH=amd64
+export GOBIN=dist/darwin
+MYSRC=src/golang.conradwood.net/deploymonkey
+( cd ${MYSRC} && make client ) || exit 10
+
+
+
 build-repo-client -branch=${GIT_BRANCH} -build=${BUILD_NUMBER} -commitid=${COMMIT_ID} -commitmsg="commit msg unknown" -repository=${PROJECT_NAME} -server_addr=buildrepo:5004 
 

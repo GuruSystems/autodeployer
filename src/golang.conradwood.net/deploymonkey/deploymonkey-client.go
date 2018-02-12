@@ -10,6 +10,7 @@ import (
 	pb "golang.conradwood.net/deploymonkey/proto"
 	"google.golang.org/grpc"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -132,6 +133,7 @@ func applyVersion() {
 }
 
 func listConfig() {
+
 	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
 	if err != nil {
 		fmt.Println("failed to dial: %v", err)
@@ -146,6 +148,9 @@ func listConfig() {
 	bail(err, "Error getting namespaces")
 	fmt.Printf("Namespaces:\n")
 	for _, n := range ns.NameSpaces {
+		if !matchesArgs(n) {
+			continue
+		}
 		gns, err := cl.GetGroups(ctx, &pb.GetGroupsRequest{NameSpace: n})
 		bail(err, "Error getting group")
 		fmt.Printf("  %s (%d groups)\n", n, len(gns.Groups))
@@ -165,6 +170,18 @@ func listConfig() {
 			}
 		}
 	}
+}
+func matchesArgs(namespace string) bool {
+	args := flag.Args()
+	if len(args) == 0 {
+		return true
+	}
+	for _, s := range args {
+		if strings.Contains(namespace, s) {
+			return true
+		}
+	}
+	return false
 }
 
 func updateRepo() {
