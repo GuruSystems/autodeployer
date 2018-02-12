@@ -34,7 +34,7 @@ cp -rvf ${MYSRC}/proto dist/
 
 export GOOS=darwin
 export GOARCH=amd64
-export GOBIN=dist/darwin
+export GOBIN=${GOBIN}/darwin
 MYSRC=src/golang.conradwood.net/deploymonkey
 ( cd ${MYSRC} && make client ) || exit 10
 
