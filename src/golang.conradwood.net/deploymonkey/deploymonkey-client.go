@@ -226,6 +226,7 @@ func updateApp() {
 		Namespace: *namespace,
 		App:       &ad,
 	}
+	fmt.Printf("Updating app %s\n", *binary)
 	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
 	if err != nil {
 		fmt.Println("failed to dial: %v", err)
