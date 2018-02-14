@@ -245,12 +245,17 @@ func updateApp() {
 }
 
 func processFile() {
+	if *namespace != "" {
+		fmt.Printf("-configfile and -namespace are mutually exclusive\n")
+		os.Exit(10)
+	}
 	fd, err := ParseFile(*filename)
 	if err != nil {
 		fmt.Printf("Failed to parse file %s: %s\n", *filename, err)
 		os.Exit(10)
 	}
-
+	*namespace = fd.Namespace
+	fmt.Printf("Set namespace to \"%s\"\n", *namespace)
 	grpc.EnableTracing = true
 	conn, err := client.DialWrapper("deploymonkey.DeployMonkey")
 	if err != nil {
