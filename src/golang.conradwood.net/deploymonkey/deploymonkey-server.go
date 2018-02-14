@@ -669,6 +669,8 @@ func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (
 	if cr.App.Repository == "" {
 		return nil, errors.New("App Repository required")
 	}
+	fmt.Printf("Request to update app:\n")
+	PrintApp(cr.App)
 	err := initDB()
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Failed to initdb: %s", err))

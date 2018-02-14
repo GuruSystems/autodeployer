@@ -45,7 +45,7 @@ func (ad *AppDiff) Describe() string {
 	}
 	// TODO: display difference in args
 	if buf.String() == "" {
-		buf.WriteString(fmt.Sprintf("Weird.\nad1=%v\nad2=%v\n", ad.Is, ad.Was))
+		buf.WriteString(fmt.Sprintf("Difference in args:\nad1=%v\nad2=%v\n", ad.Is, ad.Was))
 	}
 	return fmt.Sprintf(" Difference (%v) %s", ad.Was, buf.String())
 }
