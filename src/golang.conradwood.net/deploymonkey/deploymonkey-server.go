@@ -657,7 +657,9 @@ func (s *DeployMonkey) UpdateRepo(ctx context.Context, cr *pb.UpdateRepoRequest)
 
 // updates a single app to a new version
 func (s *DeployMonkey) UpdateApp(ctx context.Context, cr *pb.UpdateAppRequest) (*pb.GroupDefResponse, error) {
-	initDB()
+	if cr.App.BuildID == 0 {
+		return nil, errors.New("BuildID 0 is invalid")
+	}
 	if cr.Namespace == "" {
 		return nil, errors.New("Namespace required")
 	}
