@@ -7,7 +7,7 @@ PROTOCINC += -I${GOPATH}/src/golang.conradwood.net/vendor/github.com/googleapis/
 PROTOCINC += -I${GOPATH}/src/golang.conradwood.net/vendor/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis
 
 server: proto
-	go install deploymonkey-server.go parsefile.go diff.go printer.go livestate.go
+	go install deploymonkey-server.go parsefile.go diff.go printer.go livestate.go notify.go
 client: proto
 	go install deploymonkey-client.go parsefile.go printer.go
 

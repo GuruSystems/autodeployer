@@ -10,6 +10,9 @@ echo git adding new files...
 find src/${DOM}/vendor -name '*.go' | xargs -n50 git add
 find src/${DOM}/vendor -name '*.proto' | xargs -n50 git add
 
+mkdir -p src/${DOM}/vendor/gitlab.gurusys.co.uk/guru/proto/slackgateway
+cp -rvf /home/cnw/devel/guru/slack-gateway/vendor/gitlab.gurusys.co.uk/guru/proto/slackgateway/slackgateway.* src/${DOM}/vendor/gitlab.gurusys.co.uk/guru/proto/slackgateway/
+
 
 echo Done
 

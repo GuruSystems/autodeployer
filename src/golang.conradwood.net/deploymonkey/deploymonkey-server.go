@@ -498,6 +498,7 @@ func applyVersion(v int) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("error applyings apps for version %d: %s", v, err))
 	}
+	NotifyPeopleAboutDeploy(dbgroup, apps, v)
 	return nil
 }
 

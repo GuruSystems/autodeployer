@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package slackgateway;
+
+message PublishMessageRequest {
+    string OriginService = 1;
+    string Channel = 2;
+    string Test = 3;
+}
+
+message EmptyResponse {
+}
+
+service SlackGateway {
+    rpc PublishMessage (PublishMessageRequest) returns (EmptyResponse);
+}

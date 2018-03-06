@@ -13,6 +13,7 @@ import (
 // static variables for flag parser
 var (
 	log_status  = flag.String("status", "", "The status string to log")
+	match       = flag.String("filter", "", "fuzzy magic match filter to apply to logentries' application")
 	app_name    = flag.String("appname", "", "The name of the application to log or to filter on")
 	repo        = flag.String("repository", "", "The name of the repository to log")
 	groupname   = flag.String("groupname", "", "The name of the group to log or to filter on")
@@ -71,7 +72,16 @@ func showLog() {
 	addFilters(&glr)
 
 	lr, err := cl.GetLogCommandStdout(ctx, &glr)
-	bail(err, "Failed to get Logcommandstdout")
+	if err != nil {
+		fmt.Printf("Getting available apps...\n")
+		x, xe := cl.GetApps(ctx, &pb.EmptyRequest{})
+		if xe == nil {
+			for _, ld := range x.AppDef {
+				fmt.Printf("Application: \"%s\", Namespace: \"%s\", Repository: \"%s\", Groupname: \"%s\"\n", ld.Appname, ld.Namespace, ld.Repository, ld.Groupname)
+			}
+		}
+		bail(err, "Failed to get Logcommandstdout")
+	}
 	for _, entry := range lr.Entries {
 		printLogEntry(entry)
 		if int64(entry.ID) >= minlog {
@@ -121,7 +131,9 @@ func printLogEntry(e *pb.LogEntry) {
 }
 
 func addFilters(glr *pb.GetLogRequest) {
-	lf := &pb.LogFilter{}
+	lf := &pb.LogFilter{
+		FuzzyMatch: *match,
+	}
 	la := &pb.LogAppDef{
 		Appname:    *app_name,
 		Groupname:  *groupname,

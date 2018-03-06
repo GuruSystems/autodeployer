@@ -37,6 +37,7 @@ message GetResponse {
 ServiceDescription Service=1;
 ServiceLocation Location=2;
 string ServiceID=3;
+string YourIP=4; // ip of the client who called this (for matching if one wants to find, e.g. the nearest one)
 }
 message ShutdownRequest {
 string ServiceName=1;
