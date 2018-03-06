@@ -17,13 +17,16 @@ func NotifyPeopleAboutDeploy(dbgroup *DBGroup, apps []*pb.ApplicationDefinition,
 	defer conn.Close()
 	ctx := client.SetAuthToken()
 	cl := sb.NewSlackGatewayClient(conn)
+	msg := fmt.Sprintf("Deployed version %d of %s", dbgroup.groupDef.Namespace)
 	pm := &sb.PublishMessageRequest{OriginService: "originservicenotfilledinyet",
 		Channel: "deployments",
-		Test:    fmt.Sprintf("Deployed version %d of %s", dbgroup.groupDef.Namespace),
+		Test:    msg,
 	}
 	_, err = cl.PublishMessage(ctx, pm)
 	if err != nil {
 		fmt.Printf("Failed to post slack message: %s\n", err)
+	} else {
+		fmt.Printf("Posted slack message: %s\n", msg)
 	}
 
 }
