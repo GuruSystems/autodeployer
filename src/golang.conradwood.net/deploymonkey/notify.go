@@ -21,7 +21,7 @@ func NotifyPeopleAboutDeploy(dbgroup *DBGroup, apps []*pb.ApplicationDefinition,
 		Channel: "deployments",
 		Test:    fmt.Sprintf("Deployed version %d of %s", dbgroup.groupDef.Namespace),
 	}
-	_, err := cl.PublishMessage(ctx, pm)
+	_, err = cl.PublishMessage(ctx, pm)
 	if err != nil {
 		fmt.Printf("Failed to post slack message: %s\n", err)
 	}
