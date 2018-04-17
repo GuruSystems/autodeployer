@@ -17,7 +17,10 @@ func NotifyPeopleAboutDeploy(dbgroup *DBGroup, apps []*pb.ApplicationDefinition,
 	defer conn.Close()
 	ctx := client.SetAuthToken()
 	cl := sb.NewSlackGatewayClient(conn)
-	msg := fmt.Sprintf("Deployed version %d of %s", version, dbgroup.groupDef.Namespace)
+	msg := fmt.Sprintf("Datacenter update:\nApplied change #%d (%s), containing: \n", version, dbgroup.groupDef.Namespace)
+	for _, app := range apps {
+		msg = msg + fmt.Sprintf("   %d instances: build #%d of application %s\n", app.Instances, app.BuildID, app.Binary)
+	}
 	pm := &sb.PublishMessageRequest{OriginService: "originservicenotfilledinyet",
 		Channel: "deployments",
 		Test:    msg,
