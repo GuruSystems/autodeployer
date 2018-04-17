@@ -4,6 +4,10 @@
 export GOOS=linux
 export GOARCH=amd64
 
+[ -z "${BUILD_NUMBER}" ] && export BUILD_NUMBER=${CI_PIPELINE_ID}
+[ -z "${PROJECT_NAME}" ] && export PROJECT_NAME=${CI_PROJECT_NAME}
+[ -z "${COMMIT_ID}" ] && export COMMIT_ID=${CI_COMMIT_SHA}
+[ -z "${GIT_BRANCH}" ] && export GIT_BRANCH=${CI_COMMIT_REF_NAME}
 
 
 export GOBIN=`pwd`/dist

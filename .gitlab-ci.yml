@@ -1,0 +1,9 @@
+stages:
+  - build
+
+build:
+  stage: build
+  script:
+    - /usr/local/bin/blog ./autobuild.sh
+  tags:
+    - stdbuild
