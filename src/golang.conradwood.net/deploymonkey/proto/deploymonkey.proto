@@ -83,6 +83,8 @@ string NameSpace=1;
 }
 
 message GroupDef {
+// actually, this is a groupName
+// groupId and groupname is used inconsistently
 string GroupID=1;
 string NameSpace=2;
 int64 DeployedVersion=3;
